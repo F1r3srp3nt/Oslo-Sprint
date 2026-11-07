@@ -1,0 +1,69 @@
+name: Relay
+
+on:
+  pull_request:
+    paths:
+      - "relay/**"
+      - ".github/workflows/relay.yml"
+  push:
+    branches: [main]
+    paths:
+      - "relay/**"
+      - ".github/workflows/relay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: relay
+
+jobs:
+  linux:
+    name: Linux — core, adapters, runner
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trust checkout (container runs as a different user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Runner smoke tests (simulation only; no network)
+        run: |
+          BIN="$(swift build --show-bin-path)/relay-runner"
+          "$BIN" wybe-sim --shifts 3 --faults harsh | tee sim.log
+          grep -q "SIMULATED average" sim.log
+          set +e; "$BIN" wybe-live; status=$?; set -e
+          test "$status" -eq 2
+          ./scripts/demo-warehouse.sh | tee warehouse.log
+          grep -q "Escalation: How do I handle frozen goods?" warehouse.log
+      - name: No credentials in tracked files
+        run: ./scripts/check-no-secrets.sh
+
+  macos:
+    name: macOS — includes SwiftUI app target
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Build (core, adapters, runner and the Relay app)
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Build Relay.app bundle
+        run: ./scripts/build-app.sh

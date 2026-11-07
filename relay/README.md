@@ -21,6 +21,15 @@ dependencies, and does not use or touch `token-lab-macos/` (Distil).
 | ElevenLabs STT / TTS adapters | Implemented and tested against a fake transport. **Never called the real service** (no key, no network route) |
 | macOS SwiftUI app | Source complete. **Not compiled yet** because no macOS machine was available |
 
+## Continuous integration
+
+`.github/workflows/relay.yml` runs on pull requests and pushes to `main` that touch `relay/`:
+
+- **Linux** (`swift:6.0-noble`): build, the 68 tests, runner smoke tests (simulation only, no
+  network) and the credential check.
+- **macOS** (`macos-15`): build, including the SwiftUI app target, plus tests and the
+  `Relay.app` bundle.
+
 ## Requirements
 
 - macOS 14 or later with Xcode 15.3+ (Swift 5.9+) for the app.
