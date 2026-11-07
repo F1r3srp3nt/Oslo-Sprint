@@ -33,7 +33,7 @@ struct LibraryView: View {
                 }
                 .overlay { emptyState }
             }
-            .frame(minWidth: 240, idealWidth: 290, maxWidth: 420, maxHeight: .infinity)
+            .frame(minWidth: 220, idealWidth: 290, maxWidth: 420, maxHeight: .infinity)
 
             Group {
                 if let id = store.selectedLibraryID, let binding = store.libraryBinding(id) {
@@ -44,7 +44,7 @@ struct LibraryView: View {
                                            description: Text("Library items are reusable context. Inserting one into the workspace creates an independent copy."))
                 }
             }
-            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 330, maxWidth: .infinity, maxHeight: .infinity)
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search titles and text")
         .toolbar {

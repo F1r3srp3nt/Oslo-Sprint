@@ -28,7 +28,7 @@ struct ExperimentsView: View {
                     }
                 }
             }
-            .frame(minWidth: 230, idealWidth: 270, maxWidth: 380, maxHeight: .infinity)
+            .frame(minWidth: 220, idealWidth: 270, maxWidth: 380, maxHeight: .infinity)
 
             Group {
                 if let id = store.selectedExperimentID, let binding = store.experimentBinding(id) {
@@ -41,7 +41,7 @@ struct ExperimentsView: View {
                     Color.clear
                 }
             }
-            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 330, maxWidth: .infinity, maxHeight: .infinity)
         }
         .confirmationDialog("Delete “\(pendingDeletion?.name ?? "")”?",
                             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } })) {
@@ -181,11 +181,11 @@ struct SnapshotTab: View {
         PromptTextView(title: "Full-context prompt", text: report.originalPrompt, minHeight: 120, maxHeight: 400) {
             store.copyToPasteboard(report.originalPrompt, what: "the full-context prompt")
         }
-        .frame(minWidth: 280)
+        .frame(minWidth: 260)
         PromptTextView(title: "Selected prompt", text: report.selectedPrompt, minHeight: 120, maxHeight: 400) {
             store.copyToPasteboard(report.selectedPrompt, what: "the selected prompt")
         }
-        .frame(minWidth: 280)
+        .frame(minWidth: 260)
     }
 
     private func row(_ title: String, _ value: String) -> some View {
@@ -256,10 +256,10 @@ struct EvaluationTab: View {
     @ViewBuilder private var runEditors: some View {
         RunEditor(title: "Full-context answer", prompt: experiment.snapshot.originalPrompt,
                   run: $experiment.evaluation.fullContextRun)
-            .frame(minWidth: 300)
+            .frame(minWidth: 260)
         RunEditor(title: "Selected-context answer", prompt: experiment.snapshot.selectedPrompt,
                   run: $experiment.evaluation.selectedContextRun)
-            .frame(minWidth: 300)
+            .frame(minWidth: 260)
     }
 
     private var verdict: Binding<QualityVerdict> {

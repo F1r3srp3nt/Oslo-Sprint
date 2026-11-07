@@ -17,10 +17,10 @@ struct WorkspaceView: View {
                 }
                 .padding(20)
             }
-            .frame(minWidth: 380, idealWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 300, idealWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
 
             PreviewPanel()
-                .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 250, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

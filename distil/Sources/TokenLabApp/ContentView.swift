@@ -5,45 +5,22 @@ import TokenLabCore
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
 
+    /// Single-selection binding that never becomes nil, so clicking empty sidebar space
+    /// cannot clear the highlight while the detail pane keeps showing a section.
+    private var sectionSelection: Binding<AppSection?> {
+        Binding(get: { store.selectedSection ?? .overview },
+                set: { if let section = $0 { store.selectedSection = section } })
+    }
+
     var body: some View {
-        NavigationSplitView {
-            List(selection: $store.selectedSection) {
-                Section("Project") {
-                    ForEach([AppSection.overview, .workspace, .comparison, .library, .experiments]) { section in
-                        Label(section.title, systemImage: section.symbol)
-                            .badge(badge(for: section))
-                            .tag(section)
-                    }
-                }
-                Section("App") {
-                    Label(AppSection.settings.title, systemImage: AppSection.settings.symbol).tag(AppSection.settings)
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
-            .safeAreaInset(edge: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Local only", systemImage: "desktopcomputer").font(.callout)
-                    Text("No model connected · no network use").font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        } detail: {
-            let section = store.selectedSection ?? .overview
-            Group {
-                switch section {
-                case .overview: OverviewView()
-                case .workspace: WorkspaceView()
-                case .comparison: ComparisonView()
-                case .library: LibraryView()
-                case .experiments: ExperimentsView()
-                case .settings: SettingsView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(section.title)
-            .navigationSubtitle(store.windowSubtitle)
-            .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
+        // A plain split view rather than an adaptive NavigationSplitView: the sidebar is a
+        // persistent pane that the system never collapses when a detail section needs more width.
+        HSplitView {
+            sidebar
+                .frame(minWidth: Self.sidebarMinWidth, idealWidth: 210, maxWidth: 280, maxHeight: .infinity)
+            detail
+                .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
@@ -63,6 +40,54 @@ struct ContentView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+    }
+
+    /// Window minimum (760) ≥ sidebar minimum + divider + detail minimum. Each section's own panes
+    /// must fit within `detailMinWidth`.
+    static let sidebarMinWidth: CGFloat = 180
+    static let detailMinWidth: CGFloat = 560
+
+    private var sidebar: some View {
+        List(selection: sectionSelection) {
+            Section("Project") {
+                ForEach([AppSection.overview, .workspace, .comparison, .library, .experiments]) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .badge(badge(for: section))
+                        .tag(section)
+                }
+            }
+            Section("App") {
+                Label(AppSection.settings.title, systemImage: AppSection.settings.symbol).tag(AppSection.settings)
+            }
+        }
+        .listStyle(.sidebar)
+        .accessibilityLabel("Sections")
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Local only", systemImage: "desktopcomputer").font(.callout)
+                Text("No model connected · no network use").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var detail: some View {
+        let section = store.selectedSection ?? .overview
+        return Group {
+            switch section {
+            case .overview: OverviewView()
+            case .workspace: WorkspaceView()
+            case .comparison: ComparisonView()
+            case .library: LibraryView()
+            case .experiments: ExperimentsView()
+            case .settings: SettingsView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle(section.title)
+        .navigationSubtitle(store.windowSubtitle)
+        .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
     }
 
     private func badge(for section: AppSection) -> Int {
