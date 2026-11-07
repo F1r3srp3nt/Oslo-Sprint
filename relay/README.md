@@ -18,7 +18,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 | `relay-runner` CLI | Builds and runs on Linux; should be identical on macOS |
 | Warehouse training (text) | Complete and deterministic, with a **synthetic** procedure in en / nb / pl |
 | Wybe Night Shift | **Simulation only.** The live protocol hasn't been obtained, and live mode sends nothing |
-| ElevenLabs STT / TTS adapters | Implemented and tested against a fake transport. **Never called the real service** (no key, no network route) |
+| ElevenLabs STT / TTS adapters | Implemented and tested against a fake transport, and checked against elevenlabs.io docs (2026-11-07). **Never called the real service** (no key) |
 | macOS SwiftUI app | Source complete. **Not compiled yet** because no macOS machine was available |
 
 ## Continuous integration
@@ -79,7 +79,7 @@ Ctrl-C during `wybe-sim` stops before the next action. Pressing it a second time
 | **Warehouse Training** | Step card with critical warnings first, a language switcher, *I understand the safety warning* (required before *Next*), questions answered with the supporting instruction quoted, clarification, and escalation. |
 | **Wybe Runner** | Seed, shift count, fault level, Run / Stop. Shows the latest observation, the current decision rationale, the full action history with attempts, and per-shift and average **SIMULATED** scores. Live mode is locked. |
 | **Activity** | Redacted, append-only event log with filters and JSON Lines export. |
-| **Settings** | ElevenLabs API key (Keychain), connection test, voice ID, models, speech behaviour, plus the status of reasoning and Wybe. |
+| **Settings** | Guided setup. A readiness panel shows five separate checks (key saved, account check, speech input tested, speech output tested, microphone permission). Numbered ElevenLabs steps cover the API key (Keychain: save, replace, remove), voice, microphone and speech input, and models, each with buttons that open the right dashboard page, explicit test buttons and expandable *Where do I find this?* / *Troubleshooting* help. It also explains reasoning honestly and has a Wybe registration link with an integration checklist. |
 
 Text-only fallback: with no ElevenLabs key, everything except push-to-talk and spoken replies
 works. The status pills read "Not configured — text only".
@@ -98,13 +98,14 @@ works. The status pills read "Not configured — text only".
 
 ## Still needed from outside
 
-1. **Wybe:** the official contract (API, auth, command discovery, observation and action formats,
-   idempotency, rate limits, scoring). It probably needs team registration at
-   `https://nightshift-board.wybe.me/join`, which is your call. The join page could not be
-   read from the build environment because that host is blocked there. See `docs/WYBE.md`.
-2. **ElevenLabs:** your API key (entered in Settings → Keychain) and a voice ID. Before the
-   demo, check the endpoints and model IDs against https://elevenlabs.io/docs. See
-   `docs/ELEVENLABS.md`.
+1. **Wybe:** a team key from registration at `https://nightshift-board.wybe.me/join` (your call;
+   Relay has registered nothing). The organisers' key card gives the endpoint
+   (`https://nightshift.wybe.me/`) and `Authorization: Bearer <key>`. The JSON format, commands,
+   observations, retry safety, limits and scoring must then be discovered with the key, and
+   **the live adapter still has to be written**. See `docs/WYBE.md` and the checklist in Settings.
+2. **ElevenLabs:** your API key (Settings, step 1, with the Speech to Text and Text to Speech
+   permissions) and a voice ID (step 2). Instructions were checked against elevenlabs.io on
+   2026-11-07; see `docs/ELEVENLABS.md`.
 3. **Optional:** a language-model provider, if open-ended question answering is wanted
    (`docs/WAREHOUSE.md`).
 
@@ -118,9 +119,15 @@ works. The status pills read "Not configured — text only".
 - [ ] `How do I handle frozen goods?` escalates, and a *Needs attention* task appears with a badge on Tasks.
 - [ ] `run the simulation` waits for Approve. Decline cancels the task, and nothing runs.
 - [ ] Wybe Runner, Run: the banner says SIMULATION, actions stream in, and Stop (⌘.) halts before the next action. Scores read "SIMULATED … not a challenge result".
-- [ ] Settings, no key: speech pills say "Not configured — text only" and the mic button is disabled.
-- [ ] Settings, a wrong key → Test connection shows "Failed: ElevenLabs rejected the API key (401)", and the key is not visible anywhere in Activity or an export.
-- [ ] Settings, a valid key and voice: Test connection shows "Connected (verified)". Hold the mic, speak, release, edit the transcript and send. The reply is spoken, and *Stop playback* stops it.
+- [ ] Settings, no key: the readiness panel shows "Key saved: No", the speech pills say "Not configured — text only", and the mic button is disabled. Typing still works.
+- [ ] Settings › *Open API Keys*, *Open My Voices* and *Open Voice Library* open the ElevenLabs dashboard in the browser.
+- [ ] Save a wrong key: "Key saved" turns Yes but nothing reads as verified. *Check account* then shows "ElevenLabs did not accept this API key (HTTP 401)", and the key appears nowhere in Activity or an export.
+- [ ] Use a valid key without User (read): *Check account* shows "key is valid but lacks the User (read) permission" as needs-attention, not as an invalid key.
+- [ ] Paste the API key into the voice-ID field: it is refused and not saved.
+- [ ] Valid key and voice: *Test voice* plays the sample and marks "Speech output tested". *Test speech input* records 3 s and marks "Speech input tested". The account check stays a separate line.
+- [ ] Changing the speech generation model resets "Speech output tested" to Not tested.
+- [ ] Hold the mic in Assistant, speak, release, edit the transcript and send. The reply is spoken, and *Stop playback* stops it.
+- [ ] Narrow the window to its minimum width: the Settings steps stack vertically and nothing is clipped.
 - [ ] `./scripts/check-no-secrets.sh` passes.
 
 ## Third-party dependencies

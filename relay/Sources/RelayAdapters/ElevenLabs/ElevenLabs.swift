@@ -18,6 +18,8 @@ import RelayCore
 //          JSON: text, model_id, (language_code — not supported by multilingual_v2 models)
 //          response: audio bytes
 //   Check: GET  /v1/user
+// Re-verified against https://elevenlabs.io/docs (authentication, errors, speech-to-text/convert,
+// text-to-speech/convert, user/get, models) on 2026-11-07.
 
 public struct ElevenLabsConfiguration: Codable, Sendable, Equatable {
     public var baseURL: URL
@@ -27,43 +29,24 @@ public struct ElevenLabsConfiguration: Codable, Sendable, Equatable {
     public var voiceID: String
     public var outputFormat: String
 
-    /// Voice ID used in ElevenLabs' own SDK README examples. Offered as a starting point only.
+    /// Voice ID used in ElevenLabs' own SDK and API-reference examples. Offered as a starting point
+    /// only: whether a given account can use it is not guaranteed (ElevenLabs' Default voices, for
+    /// example, are only available to accounts created before March 2026).
     public static let documentationExampleVoiceID = "JBFqnCBsd6RMkjVDRZzb"
 
-    public init(baseURL: URL = URL(string: "https://api.elevenlabs.io")!, speechToTextModel: String = "scribe_v2",
-                textToSpeechModel: String = "eleven_multilingual_v2", voiceID: String = "",
-                outputFormat: String = "mp3_44100_128") {
+    public static let recommendedSpeechToTextModel = "scribe_v2"
+    /// Covers English, Norwegian and Polish (see `ModelChoice.speechGeneration`).
+    public static let recommendedTextToSpeechModel = "eleven_flash_v2_5"
+    public static let recommendedOutputFormat = "mp3_44100_128"
+
+    public init(baseURL: URL = URL(string: "https://api.elevenlabs.io")!, speechToTextModel: String = ElevenLabsConfiguration.recommendedSpeechToTextModel,
+                textToSpeechModel: String = ElevenLabsConfiguration.recommendedTextToSpeechModel, voiceID: String = "",
+                outputFormat: String = ElevenLabsConfiguration.recommendedOutputFormat) {
         self.baseURL = baseURL
         self.speechToTextModel = speechToTextModel
         self.textToSpeechModel = textToSpeechModel
         self.voiceID = voiceID
         self.outputFormat = outputFormat
-    }
-}
-
-public enum ElevenLabsError: Error, Equatable, CustomStringConvertible {
-    case missingAPIKey
-    case missingVoiceID
-    case unauthorized
-    case rateLimited
-    case invalidRequest(String)
-    case server(Int)
-    case unexpectedStatus(Int, String)
-    case decoding(String)
-    case transport(String)
-
-    public var description: String {
-        switch self {
-        case .missingAPIKey: return "No ElevenLabs API key saved (Settings)"
-        case .missingVoiceID: return "No ElevenLabs voice ID set (Settings)"
-        case .unauthorized: return "ElevenLabs rejected the API key (401)"
-        case .rateLimited: return "ElevenLabs rate limit or quota reached (429)"
-        case let .invalidRequest(message): return "ElevenLabs rejected the request: \(message)"
-        case let .server(status): return "ElevenLabs service error (\(status))"
-        case let .unexpectedStatus(status, message): return "Unexpected ElevenLabs response \(status): \(message)"
-        case let .decoding(message): return "Could not read ElevenLabs response: \(message)"
-        case let .transport(message): return message
-        }
     }
 }
 
@@ -103,39 +86,36 @@ public struct ElevenLabsClient: Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw ElevenLabsError.transport(redactor.redact(String(describing: error)))
+            throw ElevenLabsError.network(redactor.redact(String(describing: error)))
         }
-        switch response.statusCode {
-        case 200..<300: return data
-        case 401, 403: throw ElevenLabsError.unauthorized
-        case 429: throw ElevenLabsError.rateLimited
-        case 400, 422: throw ElevenLabsError.invalidRequest(errorMessage(data))
-        case 500..<600: throw ElevenLabsError.server(response.statusCode)
-        default: throw ElevenLabsError.unexpectedStatus(response.statusCode, errorMessage(data))
+        guard (200..<300).contains(response.statusCode) else {
+            throw ElevenLabsError.rejected(ElevenLabsRejection.classify(status: response.statusCode, body: data,
+                                                                        redactor: redactor))
         }
+        return data
     }
 
-    /// Extracts a short, redacted message from an error body without assuming its exact shape.
-    func errorMessage(_ data: Data) -> String {
-        var message = String(decoding: data.prefix(400), as: UTF8.self)
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let detail = json["detail"] as? [String: Any], let m = detail["message"] as? String { message = m }
-            else if let detail = json["detail"] as? String { message = detail }
-            else if let m = json["message"] as? String { message = m }
-        }
-        return String(redactor.redact(message).prefix(200))
-    }
-
-    /// Makes one real, inexpensive request (GET /v1/user). Only a 2xx response yields `.connected`.
-    public func verify(now: @Sendable () -> Date = { Date() }) async -> SpeechServiceStatus {
+    /// Account / credential check: one real request to GET /v1/user (no credits used).
+    ///
+    /// Success proves only that ElevenLabs accepted the key for this endpoint. It does not prove
+    /// that speech-to-text or text-to-speech will work (those need their own permissions,
+    /// models, voice and credits). A restricted key without `user_read` fails this check with
+    /// `.missingPermission` while speech may still work.
+    public func checkAccount() async -> Result<Void, ElevenLabsError> {
         do {
             _ = try await send(try request(path: "v1/user", method: "GET"))
-            return .connected(verifiedAt: now())
-        } catch ElevenLabsError.missingAPIKey {
-            return .unconfigured
+            return .success(())
+        } catch let error as ElevenLabsError {
+            return .failure(error)
         } catch {
-            return .failed(String(describing: error))
+            return .failure(.network(redactor.redact(String(describing: error))))
         }
+    }
+
+    /// Model IDs and output formats are placed into request bodies and query strings; only
+    /// plain identifiers are accepted.
+    public static func isPlainIdentifier(_ value: String) -> Bool {
+        !value.isEmpty && value.count <= 64 && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
     }
 }
 
@@ -146,6 +126,11 @@ public struct ElevenLabsTranscriber: SpeechTranscriber {
     public var providerName: String { "ElevenLabs Speech to Text (\(client.configuration.speechToTextModel))" }
 
     public func transcribe(audio: Data, filename: String, mimeType: String, languageHint: String?) async throws -> Transcript {
+        guard ElevenLabsClient.isPlainIdentifier(client.configuration.speechToTextModel) else {
+            throw ElevenLabsError.rejected(ElevenLabsRejection(kind: .modelUnavailable, httpStatus: 0, code: nil, type: nil,
+                                                               message: "speech recognition model ID is not a plain identifier",
+                                                               requestID: nil))
+        }
         var request = try client.request(path: "v1/speech-to-text", method: "POST")
         var form = MultipartForm()
         form.addField("model_id", client.configuration.speechToTextModel)
@@ -174,8 +159,12 @@ public struct ElevenLabsSynthesizer: SpeechSynthesizer {
     public func synthesize(text: String, languageCode: String?) async throws -> SynthesizedAudio {
         let voice = client.configuration.voiceID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !voice.isEmpty else { throw ElevenLabsError.missingVoiceID }
-        guard voice.allSatisfy({ $0.isLetter || $0.isNumber }) else {
-            throw ElevenLabsError.invalidRequest("voice ID may only contain letters and digits")
+        if let problem = VoiceIDValidation.problem(with: voice) { throw ElevenLabsError.invalidVoiceID(problem) }
+        guard ElevenLabsClient.isPlainIdentifier(client.configuration.textToSpeechModel),
+              ElevenLabsClient.isPlainIdentifier(client.configuration.outputFormat) else {
+            throw ElevenLabsError.rejected(ElevenLabsRejection(kind: .modelUnavailable, httpStatus: 0, code: nil, type: nil,
+                                                               message: "speech generation model or output format is not a plain identifier",
+                                                               requestID: nil))
         }
         var request = try client.request(path: "v1/text-to-speech/\(voice)", method: "POST",
                                          query: [URLQueryItem(name: "output_format", value: client.configuration.outputFormat)])

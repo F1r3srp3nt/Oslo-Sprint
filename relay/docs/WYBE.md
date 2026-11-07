@@ -10,25 +10,33 @@
   highest average final score wins. The agent runs autonomously in the final.
 - Do not attack or overload the server.
 
-## What could not be verified
+## What the organisers publish (read 2026-11-07, read-only)
 
-The join page could not be read from the build environment: the host
-`nightshift-board.wybe.me` is blocked by that environment's network policy, so the request
-never reached Wybe. That means **no public instructions were read**. Nothing in Relay assumes
-Wybe endpoints, payloads, command names or scoring rules.
+**Registration page** (`https://nightshift-board.wybe.me/join`), read without submitting anything:
+- The form asks for a team name (shown on the leaderboard), the event code from the screen at the venue, 1–6 member names, and an optional contact e-mail.
+- On success the page shows a team key **once**. Keys start with `ns_`, and an organiser at the venue can issue a new one if it is lost.
+- It also shows a key card:
+  - Endpoint: `https://nightshift.wybe.me/`
+  - "Send it as: Authorization: Bearer <key>"
+  - "Score as high as you can before Sunday 13:00."
+  - "Anything goes, as long as it talks to the endpoint."
+- Teams can practise right away, and organisers approve teams before the final.
+- The page also has a "Registration is closed — talk to an organizer at the venue" state.
 
-To build the live adapter, the following must come from the organisers, probably through
-team registration on the join page. Registering is your decision, so Relay has not done it:
+**Endpoint**: one unauthenticated `GET https://nightshift.wybe.me/` returned
+`{"ok":true,"result":"Hotel Wybe night shift terminal. Speak JSON. Most things start with help."}`.
+Nothing else was sent: no key, and no guessed paths.
 
-1. API base URL and transport (HTTP/WebSocket), and how practice and final shifts are started.
-2. How the agent authenticates (team token? per-shift key?) and where that credential comes from.
-3. How to discover the robot's commands (a help or describe call?) and their argument formats.
-4. The observation format: tasks, their states, deadlines, room/location flags, robot state.
-5. The action request and response format, including how refusals are reported.
-6. Whether actions are idempotent, accept an idempotency key, or can be status-checked after
-   a lost response.
-7. Rate limits and any "careless action" penalties for invalid or repeated commands.
-8. How scores are reported, so that only service-reported numbers are ever shown as live.
+## Still missing
+
+Relay registered nothing; registering is your decision. These must be discovered with the team key and are shown as a checklist in Settings (`WybeIntegration.requirements`):
+
+1. The exact JSON request and response format ("Speak JSON").
+2. The robot's command list ("most things start with help").
+3. The task and observation format.
+4. Whether actions are safe to retry, or can be status-checked after a lost response.
+5. Rate limits, penalties, and how practice and final shifts are scored.
+6. **Relay's live adapter itself.** `LiveNightShiftAdapter` is still a placeholder that sends nothing. Entering a team key will not connect Relay; the adapter has to be written once the format is known.
 
 ## Runner architecture (implemented, simulated)
 
