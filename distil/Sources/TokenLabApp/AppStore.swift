@@ -352,17 +352,12 @@ enum AppSection: String, CaseIterable, Identifiable {
             .sorted { order.firstIndex(of: $0.comparison!.variant)! < order.firstIndex(of: $1.comparison!.variant)! }
     }
 
-    /// Copy this experiment's full-context answer to group members that have none yet. Never overwrites.
+    /// Copy this experiment's full-context reference to linked experiments that qualify (same comparison,
+    /// byte-identical saved full-context prompt, completely blank reference). Never overwrites anything.
     func shareFullContextAnswer(from id: UUID) {
-        guard let source = document.experiments.first(where: { $0.id == id }), source.evaluation.fullContextRun.hasResponse,
-              let group = source.comparison?.groupID else { return }
-        var copied = 0, skipped = 0
-        for index in document.experiments.indices where document.experiments[index].comparison?.groupID == group && document.experiments[index].id != id {
-            if document.experiments[index].evaluation.fullContextRun.hasResponse { skipped += 1; continue }
-            document.experiments[index].evaluation.fullContextRun = source.evaluation.fullContextRun
-            copied += 1
-        }
-        status = "Copied the full-context answer to \(copied) linked experiment\(copied == 1 ? "" : "s")" + (skipped > 0 ? "; \(skipped) already had one and were not changed." : ".")
+        let (updated, outcome) = ReferenceSharing.share(from: id, in: document.experiments)
+        if outcome.sourceUnavailable == nil { document.experiments = updated }
+        status = outcome.summary
     }
 
     func experimentBinding(_ id: UUID) -> Binding<Experiment>? {

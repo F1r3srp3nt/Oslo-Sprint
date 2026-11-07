@@ -97,7 +97,7 @@ struct ComparisonView: View {
             row("Input tokens", entries) { "\($0.selectedTokens)" }
             row("Counter", entries) { $0.counter.kind == .approximation ? "\($0.counter.encoding) (estimate)" : $0.counter.encoding }
             row("Est. change vs full", entries) { report in
-                report.estimatedReduction == 0 ? "—" : "−\(report.estimatedReduction) (\(percentString(report.estimatedReductionPercent)))"
+                TokenChange.describe(baseline: report.originalTokens, candidate: report.selectedTokens)
             }
             row("Retained / excluded", entries) { "\($0.keptCount) / \($0.removedCount)" }
             row("Budget", entries) { report in

@@ -497,7 +497,7 @@ struct ReportMetrics: View {
                     MetricTile(title: "Full context", value: "\(report.originalTokens)", systemImage: "text.alignleft")
                     MetricTile(title: "Selected", value: "\(report.selectedTokens)", systemImage: "line.3.horizontal.decrease")
                     MetricTile(title: "Est. reduction", value: percentString(report.estimatedReductionPercent),
-                               caption: "\(report.estimatedReduction) fewer · input size, not quality",
+                               caption: "\(TokenChange.describe(baseline: report.originalTokens, candidate: report.selectedTokens)) · input size, not quality",
                                systemImage: "arrow.down.right")
                 }
             }
