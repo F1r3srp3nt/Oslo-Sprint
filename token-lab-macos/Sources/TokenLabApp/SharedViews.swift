@@ -108,8 +108,7 @@ struct RelevanceTermsView: View {
                 Text("· no task terms found").font(.caption).foregroundStyle(.secondary)
             } else {
                 Text("·").font(.caption).foregroundStyle(.tertiary)
-                Text(relevance.matchedTerms.map { "\($0.term) +\(String(format: "%.2f", $0.weight))\($0.occurrences > 1 ? " (×\($0.occurrences))" : "")" }
-                        .joined(separator: ", "))
+                Text(Self.termsText(relevance.matchedTerms))
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -117,6 +116,18 @@ struct RelevanceTermsView: View {
         .accessibilityLabel(relevance.matchedTerms.isEmpty
                             ? "Keyword score 0, no task terms found"
                             : "Keyword score \(String(format: "%.2f", relevance.score)) from \(relevance.matchedTerms.map(\.term).joined(separator: ", "))")
+    }
+}
+
+extension RelevanceTermsView {
+    static func termsText(_ terms: [TermContribution]) -> String {
+        var parts: [String] = []
+        for term in terms {
+            var part = term.term + " +" + String(format: "%.2f", term.weight)
+            if term.occurrences > 1 { part += " (×\(term.occurrences))" }
+            parts.append(part)
+        }
+        return parts.joined(separator: ", ")
     }
 }
 

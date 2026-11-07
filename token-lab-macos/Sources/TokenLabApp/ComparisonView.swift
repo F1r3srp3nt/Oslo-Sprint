@@ -135,7 +135,7 @@ struct ComparisonView: View {
                 }
                 Divider()
                 ForEach(Array(store.document.draft.blocks.enumerated()), id: \.element.id) { index, block in
-                    let relevance = entries.last?.report.decisions.first(where: { $0.id == block.id })?.relevance
+                    let relevance = relevanceEntry(entries)?.report.decisions.first(where: { $0.id == block.id })?.relevance
                     GridRow {
                         Button {
                             selectedBlock = selectedBlock == block.id ? nil : block.id
@@ -187,12 +187,27 @@ struct ComparisonView: View {
 
     // MARK: Saved comparisons
 
+    private func relevanceEntry(_ entries: [ComparisonEntry]) -> ComparisonEntry? {
+        entries.first(where: { $0.variant == .relevanceBudget })
+    }
+
+    /// Saved comparison groups, newest first.
+    private var savedGroupList: (groups: [UUID: [Experiment]], order: [UUID]) {
+        let linked = store.document.experiments.filter { $0.comparison != nil }
+        let groups = Dictionary(grouping: linked) { (experiment: Experiment) -> UUID in experiment.comparison!.groupID }
+        var newest: [UUID: Date] = [:]
+        for (key, members) in groups { newest[key] = members.map(\.createdAt).max() ?? .distantPast }
+        let order = groups.keys.sorted { (a: UUID, b: UUID) -> Bool in newest[a, default: .distantPast] > newest[b, default: .distantPast] }
+        return (groups, order)
+    }
+
     @ViewBuilder private var savedGroups: some View {
-        let groups = Dictionary(grouping: store.document.experiments.filter { $0.comparison != nil }) { $0.comparison!.groupID }
+        let list = savedGroupList
+        let groups = list.groups
         if !groups.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Saved comparisons").font(.headline)
-                ForEach(groups.keys.sorted { (groups[$0]?.first?.createdAt ?? .distantPast) > (groups[$1]?.first?.createdAt ?? .distantPast) }, id: \.self) { key in
+                ForEach(list.order, id: \.self) { key in
                     let members = groups[key] ?? []
                     Button {
                         store.selectedExperimentID = members.first?.id
