@@ -26,30 +26,41 @@ public struct BlockDecision: Codable, Identifiable, Equatable, Hashable, Sendabl
     public var reason: String
     /// Tokens of this block's text on its own, with the report's counter.
     public var standaloneTokens: Int
-    /// For removed duplicates: the block whose identical text was kept (nil if it matched the instructions).
+    /// For removed duplicates: the block whose identical text was kept (nil if it matched the task or instructions).
     public var duplicateOf: UUID?
+    /// Keyword relevance (task-relevance strategy only).
+    public var relevance: RelevanceScore?
+    /// 1-based position in which the strategy considered this optional block (budget strategies only).
+    public var considerationRank: Int?
 
     public var kept: Bool { kind.kept }
 }
 
 /// A complete, reproducible record of one selection run.
 public struct SelectionReport: Codable, Equatable, Sendable {
-    public static let currentEngineVersion = "selection-engine-2"
+    public static let currentEngineVersion = "selection-engine-3"
     public static let separator = "\n\n"
 
     public var engineVersion: String
     public var input: Draft
     public var settings: SelectionSettings
     public var counter: TokenCounterDescriptor
-    /// Instructions plus all non-empty context, in order: the full-context prompt.
+    /// Instructions, all non-empty context and the task: the full-context prompt.
     public var originalPrompt: String
-    /// Instructions plus retained context, in original order.
+    /// Instructions, retained context in original order, and the task.
     public var selectedPrompt: String
     public var originalTokens: Int
     public var selectedTokens: Int
-    /// Tokens for instructions plus required context alone.
+    /// Tokens for instructions, task and required context alone (assembled).
     public var protectedTokens: Int
     public var decisions: [BlockDecision]
+    /// Tokens of the task and the instructions on their own (absent in reports from engine 2).
+    public var taskTokens: Int?
+    public var instructionsTokens: Int?
+    /// Ranking details (task-relevance strategy only).
+    public var ranker: RankerDescriptor?
+    public var taskTerms: [String]?
+    public var relevanceNote: String?
 
     public var budget: Int { settings.budget }
     public var budgetEnforced: Bool { settings.enforcesBudget }
@@ -78,18 +89,19 @@ public struct SelectionReport: Codable, Equatable, Sendable {
         let unit = counter.kind == .approximation ? "estimated tokens" : "\(counter.encoding) tokens"
         if budgetEnforced {
             if protectedExceedsBudget {
-                return "Protected content alone is \(protectedTokens) \(unit), \(protectedTokens - budget) over the budget of \(budget). It was kept intact and not truncated; all optional context was excluded."
+                return "Protected content alone (task, instructions and required blocks) is \(protectedTokens) \(unit), \(protectedTokens - budget) over the budget of \(budget). It was kept intact and not truncated; all optional context was excluded."
             }
-            return "Selected prompt is \(selectedTokens) of \(budget) \(unit)."
+            return "The whole assembled prompt is \(selectedTokens) of \(budget) \(unit)."
         }
         if overBudget {
-            return "This strategy does not apply the budget. The selected prompt is \(selectedTokens) \(unit), \(overBudgetBy) over the budget of \(budget)."
+            return "This strategy does not apply the budget. The assembled prompt is \(selectedTokens) \(unit), \(overBudgetBy) over the budget of \(budget)."
         }
-        return "This strategy does not apply the budget. The selected prompt is \(selectedTokens) \(unit), within the budget of \(budget)."
+        return "This strategy does not apply the budget. The assembled prompt is \(selectedTokens) \(unit), within the budget of \(budget)."
     }
 }
 
-/// Deterministic, explainable context selection. Pure: same inputs and counter always give the same report.
+/// Deterministic, explainable context selection. Pure: same inputs, counter and ranker always give the
+/// same report. Ranking (`RelevanceRanker`) and counting (`TokenCounter`) are injected, not built in.
 public enum SelectionEngine {
     public static let maxBlocks = 500
     public static let maxTextBytes = 2_000_000
@@ -104,22 +116,26 @@ public enum SelectionEngine {
         if let bad = draft.blocks.first(where: { !ContextPriority.range.contains($0.priority) }) {
             throw LabError.invalid("Priority must be between 1 and 3 (block “\(bad.title)” has \(bad.priority)).")
         }
-        let bytes = draft.instructions.utf8.count + draft.blocks.reduce(0) { $0 + $1.text.utf8.count }
+        let bytes = draft.task.utf8.count + draft.instructions.utf8.count + draft.blocks.reduce(0) { $0 + $1.text.utf8.count }
         guard bytes <= maxTextBytes else {
             throw LabError.invalid("Workspace text is limited to 2 MB in this prototype.")
         }
     }
 
-    /// Assemble a prompt: instructions first, then the given blocks' text in their original order.
+    /// Assemble a prompt: protected instructions, then the kept blocks in their original order, then the task.
+    /// Parts are joined with a blank line; no text is added, removed or reformatted.
     public static func assemble(_ draft: Draft, keeping kept: Set<UUID>? = nil) -> String {
         parts(draft, keeping: kept).joined(separator: SelectionReport.separator)
     }
 
     static func parts(_ draft: Draft, keeping kept: Set<UUID>?) -> [String] {
-        ([draft.instructions] + draft.blocks.filter { kept?.contains($0.id) ?? true }.map(\.text)).filter { !$0.isEmpty }
+        ([draft.instructions] + draft.blocks.filter { kept?.contains($0.id) ?? true }.map(\.text) + [draft.task])
+            .filter { !$0.isEmpty }
     }
 
-    public static func run(_ draft: Draft, settings: SelectionSettings, counter: any TokenCounter) throws -> SelectionReport {
+    public static func run(_ draft: Draft, settings: SelectionSettings, counter: any TokenCounter,
+                           ranker: any RelevanceRanker = KeywordOverlapRanker(),
+                           isCancelled: () -> Bool = { false }) throws -> SelectionReport {
         try validate(draft)
         try settings.validate()
 
@@ -128,6 +144,7 @@ public enum SelectionEngine {
         var kinds: [UUID: DecisionKind] = [:]
         var reasons: [UUID: String] = [:]
         var duplicateOf: [UUID: UUID] = [:]
+        var ranks: [UUID: Int] = [:]
 
         // 1. Empty and required blocks are decided the same way under every strategy.
         for block in blocks {
@@ -136,14 +153,16 @@ public enum SelectionEngine {
                 reasons[block.id] = "Skipped: the block is empty and adds no text."
             } else if block.required {
                 kinds[block.id] = .required
-                reasons[block.id] = "Kept: marked required, preserved verbatim."
+                reasons[block.id] = settings.strategy == .taskRelevance
+                    ? "Kept: marked required, preserved verbatim. Relevance is shown for information only."
+                    : "Kept: marked required, preserved verbatim."
             }
         }
         let optional = blocks.enumerated().filter { kinds[$0.element.id] == nil }
 
         // 2. Optional exact deduplication (byte comparison; no Unicode normalisation).
         if settings.deduplicates {
-            let instructionBytes = Array(draft.instructions.utf8)
+            let taskBytes = Array(draft.task.utf8), instructionBytes = Array(draft.instructions.utf8)
             var requiredByText: [[UInt8]: ContextBlock] = [:]
             for block in blocks where block.required && !block.text.isEmpty {
                 let key = Array(block.text.utf8)
@@ -156,7 +175,10 @@ public enum SelectionEngine {
             var keptCopy: [[UInt8]: ContextBlock] = [:]
             for (_, block) in ordered {
                 let key = Array(block.text.utf8)
-                if !draft.instructions.isEmpty && key == instructionBytes {
+                if !draft.task.isEmpty && key == taskBytes {
+                    kinds[block.id] = .duplicateRemoved
+                    reasons[block.id] = "Removed: exact duplicate of the task."
+                } else if !draft.instructions.isEmpty && key == instructionBytes {
                     kinds[block.id] = .duplicateRemoved
                     reasons[block.id] = "Removed: exact duplicate of the protected instructions."
                 } else if let original = requiredByText[key] {
@@ -172,43 +194,68 @@ public enum SelectionEngine {
             }
         }
 
-        // 3. Strategy-specific selection of the remaining optional blocks.
+        // 3. Relevance scores (task-relevance strategy only). Ranking never edits or selects text itself.
+        var relevance: [UUID: RelevanceScore] = [:]
+        var taskTerms: [String]? = nil
+        var relevanceNote: String? = nil
+        if settings.strategy == .taskRelevance {
+            relevance = ranker.scores(task: draft.task, blocks: blocks)
+            let terms = ranker.taskTerms(draft.task)
+            taskTerms = terms
+            if terms.isEmpty {
+                relevanceNote = "The task has no usable terms, so every block scores 0. Optional blocks were considered in manual-priority order, then prompt order."
+            } else if optional.allSatisfy({ (relevance[$0.element.id]?.score ?? 0) == 0 }) {
+                relevanceNote = "No optional block contains any task term. Optional blocks were considered in manual-priority order, then prompt order."
+            }
+        }
+
+        // 4. Strategy-specific selection of the remaining optional blocks.
         let remaining = optional.filter { kinds[$0.element.id] == nil }
         switch settings.strategy {
         case .baseline:
             for (_, block) in remaining {
-                kinds[block.id] = .retained; reasons[block.id] = "Kept: the baseline strategy retains all context."
+                kinds[block.id] = .retained; reasons[block.id] = "Kept: the full-context strategy retains all context."
             }
         case .exactDeduplication:
             for (_, block) in remaining {
                 kinds[block.id] = .retained; reasons[block.id] = "Kept: no exact duplicate of this text is retained elsewhere."
             }
-        case .budgetSelection:
+        case .budgetSelection, .taskRelevance:
+            let byRelevance = settings.strategy == .taskRelevance
+            let score: (ContextBlock) -> Double = { relevance[$0.id]?.score ?? 0 }
+            let candidates = remaining.sorted { a, b in
+                if byRelevance && score(a.element) != score(b.element) { return score(a.element) > score(b.element) }
+                if a.element.priority != b.element.priority { return a.element.priority > b.element.priority }
+                return a.offset < b.offset
+            }
             var kept = Set(blocks.filter { kinds[$0.id] == .required }.map(\.id))
             let protectedTokens = counter.countJoined(parts(draft, keeping: kept), separator: SelectionReport.separator)
-            let candidates = remaining.sorted { a, b in
-                a.element.priority != b.element.priority ? a.element.priority > b.element.priority : a.offset < b.offset
-            }
-            for (_, block) in candidates {
-                let label = ContextPriority.label(block.priority).lowercased()
+            for (position, (_, block)) in candidates.enumerated() {
+                if isCancelled() { throw CancellationError() }
+                ranks[block.id] = position + 1
+                let because = byRelevance
+                    ? relevanceExplanation(block, score: relevance[block.id], rank: position + 1, of: candidates.count,
+                                           tiedWith: candidates.filter { $0.element.id != block.id && score($0.element) == score(block) }.count)
+                    : "\(ContextPriority.label(block.priority).lowercased()) priority"
                 if protectedTokens > settings.budget {
                     kinds[block.id] = .excludedByBudget
-                    reasons[block.id] = "Excluded: protected content alone (\(protectedTokens)) already exceeds the budget of \(settings.budget)."
+                    reasons[block.id] = "Excluded: \(because); protected content alone (\(protectedTokens)) already exceeds the budget of \(settings.budget)."
                     continue
                 }
                 kept.insert(block.id)
                 let total = counter.countJoined(parts(draft, keeping: kept), separator: SelectionReport.separator)
                 if total <= settings.budget {
                     kinds[block.id] = .retained
-                    reasons[block.id] = "Kept: \(label) priority; prompt total \(total) of \(settings.budget) after adding it."
+                    reasons[block.id] = "Kept: \(because); assembled prompt \(total) of \(settings.budget) after adding it."
                 } else {
                     kept.remove(block.id)
                     kinds[block.id] = .excludedByBudget
-                    reasons[block.id] = "Excluded: \(label) priority; adding it would make the prompt \(total), over the budget of \(settings.budget)."
+                    reasons[block.id] = "Excluded: \(because); adding it would make the assembled prompt \(total), over the budget of \(settings.budget). The block was not shortened."
                 }
             }
         }
 
+        if isCancelled() { throw CancellationError() }
         let keptIDs = Set(blocks.filter { kinds[$0.id]?.kept == true }.map(\.id))
         let requiredIDs = Set(blocks.filter { kinds[$0.id] == .required }.map(\.id))
         let originalParts = parts(draft, keeping: nil)
@@ -216,7 +263,8 @@ public enum SelectionEngine {
         let decisions = blocks.map { block in
             BlockDecision(id: block.id, title: title(block), category: block.category, priority: block.priority,
                           required: block.required, kind: kinds[block.id]!, reason: reasons[block.id]!,
-                          standaloneTokens: counter.count(block.text), duplicateOf: duplicateOf[block.id])
+                          standaloneTokens: counter.count(block.text), duplicateOf: duplicateOf[block.id],
+                          relevance: relevance[block.id], considerationRank: ranks[block.id])
         }
         return SelectionReport(
             engineVersion: SelectionReport.currentEngineVersion,
@@ -226,6 +274,38 @@ public enum SelectionEngine {
             originalTokens: counter.countJoined(originalParts, separator: SelectionReport.separator),
             selectedTokens: counter.countJoined(selectedParts, separator: SelectionReport.separator),
             protectedTokens: counter.countJoined(parts(draft, keeping: requiredIDs), separator: SelectionReport.separator),
-            decisions: decisions)
+            decisions: decisions,
+            taskTokens: counter.count(draft.task),
+            instructionsTokens: counter.count(draft.instructions),
+            ranker: settings.strategy == .taskRelevance ? ranker.descriptor : nil,
+            taskTerms: taskTerms,
+            relevanceNote: relevanceNote)
     }
+
+    static func relevanceExplanation(_ block: ContextBlock, score: RelevanceScore?, rank: Int, of total: Int, tiedWith ties: Int) -> String {
+        let value = score?.score ?? 0
+        var text: String
+        if let score, !score.matchedTerms.isEmpty {
+            text = "relevance \(format(value)) from \(score.matchedTerms.map(\.term).joined(separator: ", ")); considered \(rank) of \(total)"
+        } else {
+            text = "relevance 0 (no task terms found; considered after every matching block, \(rank) of \(total))"
+        }
+        if ties > 0 {
+            text += "; tied with \(ties) other block\(ties == 1 ? "" : "s"), so manual priority (\(ContextPriority.label(block.priority).lowercased())) then prompt order decided"
+        }
+        return text
+    }
+
+    static func format(_ value: Double) -> String { String(format: "%.2f", value) }
+}
+
+/// Tracks which background calculation is the latest, so an older result can never replace a newer one.
+public struct LatestResultGate: Sendable {
+    public private(set) var generation = 0
+    public init() {}
+    /// Start a calculation; returns its ticket.
+    public mutating func begin() -> Int { generation += 1; return generation }
+    /// Make every outstanding ticket stale (for example when inputs change).
+    public mutating func invalidate() { generation += 1 }
+    public func isLatest(_ ticket: Int) -> Bool { ticket == generation }
 }

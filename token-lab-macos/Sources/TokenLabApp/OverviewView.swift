@@ -13,7 +13,22 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                if !document.notes.isEmpty {
+                    Label(document.notes, systemImage: "info.circle")
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                }
                 if isEmptyProject { gettingStarted }
+                if !document.draft.task.isEmpty {
+                    GroupBox("Current task") {
+                        Text(document.draft.task).textSelection(.enabled)
+                            .lineLimit(4)
+                            .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 Grid(horizontalSpacing: 10, verticalSpacing: 10) {
                     GridRow {
                         MetricTile(title: "Context blocks", value: "\(document.draft.blocks.count)",
@@ -34,6 +49,7 @@ struct OverviewView: View {
                         Label("Token counts come from the counter named next to them. The approximate counter is a heuristic; model tokenizers count prompt text only, without message formatting or provider overhead.", systemImage: "number")
                         Label("A reduction is an estimate of input size. It is not a measured cost saving.", systemImage: "chart.line.downtrend.xyaxis")
                         Label("A smaller prompt is not automatically better. Quality stays “Not evaluated” until you compare answers in Experiments.", systemImage: "checkmark.shield")
+                        Label("Task relevance is keyword matching, not semantic understanding. A match does not show that a block is useful.", systemImage: "text.magnifyingglass")
                     }
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
@@ -74,8 +90,20 @@ struct OverviewView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Get started").font(.headline)
-                Text("1. Write the protected instructions and current request.\n2. Add context blocks; mark essentials as required and set priorities.\n3. Choose a strategy and budget, then inspect every decision in the preview.\n4. Save experiments and compare the answers each prompt produces.")
+                Text("1. Write the task and the protected instructions.\n2. Add context blocks; mark essentials as required and set priorities.\n3. Choose a strategy and budget, then inspect every decision in the preview.\n4. Compare all four configurations, save them as experiments and review the answers each prompt produces.")
                     .fixedSize(horizontal: false, vertical: true)
+                Text("Demonstrations (synthetic; not benchmark evidence):").font(.callout.weight(.medium))
+                ForEach(DemoDataset.ID.allCases) { id in
+                    Button { store.loadDemo(id) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(id.title).fontWeight(.medium)
+                            Text(id.summary).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
                 HStack {
                     Button("Load Example Project") { store.loadExample() }
                     Button("Start in Workspace") { store.selectedSection = .workspace }

@@ -9,7 +9,7 @@ struct ContentView: View {
         NavigationSplitView {
             List(selection: $store.selectedSection) {
                 Section("Project") {
-                    ForEach([AppSection.overview, .workspace, .library, .experiments]) { section in
+                    ForEach([AppSection.overview, .workspace, .comparison, .library, .experiments]) { section in
                         Label(section.title, systemImage: section.symbol)
                             .badge(badge(for: section))
                             .tag(section)
@@ -34,6 +34,7 @@ struct ContentView: View {
                 switch section {
                 case .overview: OverviewView()
                 case .workspace: WorkspaceView()
+                case .comparison: ComparisonView()
                 case .library: LibraryView()
                 case .experiments: ExperimentsView()
                 case .settings: SettingsView()

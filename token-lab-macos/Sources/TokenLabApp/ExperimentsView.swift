@@ -63,6 +63,7 @@ struct ExperimentRow: View {
             Text("\(experiment.snapshot.settings.strategy.displayName) · \(experiment.snapshot.originalTokens) → \(experiment.snapshot.selectedTokens) \(experiment.snapshot.counter.kind == .approximation ? "est." : experiment.snapshot.counter.encoding)")
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 6) {
+                if experiment.comparison != nil { Image(systemName: "rectangle.split.3x1").font(.caption2).foregroundStyle(.secondary).help("Part of a saved comparison") }
                 Pill(text: experiment.evaluation.verdict.label, color: experiment.evaluation.isEvaluated ? .blue : .secondary)
                 Text(experiment.createdAt, style: .date).font(.caption2).foregroundStyle(.tertiary)
             }
@@ -136,21 +137,28 @@ struct SnapshotTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if experiment.comparison != nil { ComparisonGroupPanel(experiment: experiment) }
             ReportMetrics(report: report)
             Label(report.budgetSummary, systemImage: report.overBudget ? "exclamationmark.triangle.fill" : "checkmark.seal")
                 .font(.callout)
                 .foregroundStyle(report.overBudget ? Color.orange : Color.primary)
             GroupBox("Recorded settings") {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    Group {
                     row("Strategy", report.settings.strategy.displayName)
                     row("Budget", "\(report.settings.budget) (\(report.budgetEnforced ? "enforced" : "reported only"))")
                     row("Deduplication", report.settings.deduplicates ? "Exact, byte-for-byte" : "Off")
                     row("Counter", report.counter.displayName)
                     row("Encoding", report.counter.encoding)
                     row("Counter version", report.counter.version)
+                    }
+                    Group {
                     row("Counter type", report.counter.kind == .approximation ? "Approximation" : "Model tokenizer (text only)")
                     row("Engine", report.engineVersion)
+                    row("Ranker", report.ranker.map { "\($0.displayName) (\($0.version))" } ?? "Not used")
+                    row("Task terms", report.taskTerms.map { $0.isEmpty ? "none usable" : $0.joined(separator: ", ") } ?? "—")
                     row("Protected tokens", "\(report.protectedTokens)")
+                    }
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -201,6 +209,12 @@ struct EvaluationTab: View {
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if experiment.comparison != nil && experiment.evaluation.fullContextRun.hasResponse {
+                Button { store.shareFullContextAnswer(from: experiment.id) } label: {
+                    Label("Copy Full-Context Answer to Linked Experiments", systemImage: "arrow.triangle.branch")
+                }
+                .help("Fills linked experiments that have no full-context answer yet. Existing answers are never overwritten.")
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 12) { runEditors }
                 VStack(alignment: .leading, spacing: 12) { runEditors }
@@ -428,5 +442,38 @@ struct ReproduceTab: View {
             }
         }
         .onChange(of: experiment.id) { result = nil }
+    }
+}
+
+/// Linked variants of a saved comparison, with their evaluation status.
+struct ComparisonGroupPanel: View {
+    @EnvironmentObject private var store: AppStore
+    let experiment: Experiment
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Saved together from the same input. Only the strategy differs.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                    ForEach(store.groupMembers(of: experiment.id)) { member in
+                        GridRow {
+                            Button(member.comparison?.variant.label ?? member.name) { store.selectedExperimentID = member.id }
+                                .buttonStyle(.link)
+                                .fontWeight(member.id == experiment.id ? .semibold : .regular)
+                            Text("\(member.snapshot.selectedTokens) \(member.snapshot.counter.kind == .approximation ? "est." : member.snapshot.counter.encoding)")
+                                .monospacedDigit().foregroundStyle(.secondary)
+                            Text("\(member.snapshot.keptCount) kept · \(member.snapshot.removedCount) removed").foregroundStyle(.secondary)
+                            Pill(text: member.evaluation.statusLabel, color: member.evaluation.isEvaluated ? .blue : .secondary)
+                        }
+                    }
+                }
+                .font(.callout)
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label(experiment.comparison?.groupName ?? "Comparison", systemImage: "rectangle.split.3x1")
+        }
     }
 }

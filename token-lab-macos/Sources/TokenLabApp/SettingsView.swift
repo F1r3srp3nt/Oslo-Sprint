@@ -88,6 +88,14 @@ struct SettingsView: View {
                 Text("These vocabularies come from the open-source tiktoken project (MIT licence). They are not bundled and the app never downloads them: download a file yourself from the address shown, then import it. A file is accepted only if its SHA-256 matches the published value. Model families are listed as mapped in tiktoken 0.14.0. No offline tokenizer is published for some other providers’ current models; counting for those would need the provider’s own token-counting service through a future adapter.")
             }
 
+            Section {
+                RankingMethodView()
+            } header: {
+                Text("Task relevance ranking")
+            } footer: {
+                Text("Ranking runs locally and deterministically. It is kept separate from token counting and selection so a stronger method can replace it later; the ranker’s name and version are recorded in every report.")
+            }
+
             Section("Preview") {
                 Toggle("Update the preview automatically after edits", isOn: $autoPreview)
                 Text("When off, use Prompt → Update Preview (⌘↩). Previews are always hidden as soon as inputs or settings change.")
@@ -127,10 +135,10 @@ struct SettingsView: View {
             }
 
             Section("About this build") {
-                LabeledContent("Version", value: "0.3.0 · development build")
+                LabeledContent("Version", value: "0.4.0 · development build")
                 LabeledContent("Project file schema", value: "\(ProjectDocument.currentSchemaVersion) (reads 1–\(ProjectDocument.currentSchemaVersion))")
                 LabeledContent("Selection engine", value: SelectionReport.currentEngineVersion)
-                Text("“Token Lab” is a temporary descriptive name. No company identity, logos, accounts or third-party code are included.")
+                Text("Distil is the working product name. Internal identifiers (package, module and bundle identifier) are unchanged. No company identity, logos, accounts or third-party code are included.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

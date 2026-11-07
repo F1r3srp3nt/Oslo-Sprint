@@ -54,15 +54,18 @@ public struct ContextBlock: Identifiable, Codable, Equatable, Hashable, Sendable
     }
 }
 
-/// The task being prepared: protected instructions / current request plus candidate context.
+/// The inputs being prepared. Assembled prompt order (see `SelectionEngine.assemble`):
+/// protected instructions, then retained context in original order, then the task.
 public struct Draft: Codable, Equatable, Hashable, Sendable {
-    /// Protected instructions and the current request. Always kept verbatim, first in the prompt.
+    /// The current task or question. Always kept verbatim; placed last in the assembled prompt.
+    public var task: String
+    /// Protected instructions and constraints. Always kept verbatim; placed first.
     public var instructions: String
-    /// Context in prompt order. Retained blocks keep this order in the selected prompt.
+    /// Optional or required context in prompt order. Retained blocks keep this order.
     public var blocks: [ContextBlock]
 
-    public init(instructions: String = "", blocks: [ContextBlock] = []) {
-        self.instructions = instructions; self.blocks = blocks
+    public init(task: String = "", instructions: String = "", blocks: [ContextBlock] = []) {
+        self.task = task; self.instructions = instructions; self.blocks = blocks
     }
 }
 
@@ -73,16 +76,29 @@ public enum SelectionStrategy: String, Codable, CaseIterable, Identifiable, Send
     case baseline
     /// B. Remove only optional blocks whose text is byte-identical to retained text.
     case exactDeduplication
-    /// C. Choose optional blocks by priority until the token budget is reached.
+    /// C. Choose optional blocks by manual priority until the token budget is reached.
     case budgetSelection
+    /// D. Choose optional blocks by local task-term relevance, then priority, until the budget is reached.
+    case taskRelevance
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .baseline: return "Baseline"
+        case .baseline: return "Full context"
         case .exactDeduplication: return "Exact deduplication"
-        case .budgetSelection: return "Budget selection"
+        case .budgetSelection: return "Manual-priority budget"
+        case .taskRelevance: return "Task-relevance budget"
+        }
+    }
+
+    /// Compact label for segmented controls.
+    public var shortName: String {
+        switch self {
+        case .baseline: return "Full"
+        case .exactDeduplication: return "Dedupe"
+        case .budgetSelection: return "Priority"
+        case .taskRelevance: return "Relevance"
         }
     }
 
@@ -91,20 +107,33 @@ public enum SelectionStrategy: String, Codable, CaseIterable, Identifiable, Send
         case .baseline:
             return "Retains all context. Use it as the full-context reference for comparisons."
         case .exactDeduplication:
-            return "Removes optional blocks whose text is byte-for-byte identical to the instructions, a required block or a higher-priority copy. Nothing else is removed and the budget is not applied."
+            return "Removes optional blocks whose text is byte-for-byte identical to the task, the instructions, a required block or a higher-priority copy. Nothing else is removed and the budget is not applied."
         case .budgetSelection:
-            return "Keeps required content, then adds optional blocks from highest to lowest priority (ties in prompt order) while the estimated total stays within the budget. Exact deduplication runs first only if enabled."
+            return "Keeps required content, then adds optional blocks from highest to lowest manual priority (ties in prompt order) while the whole assembled prompt stays within the budget. Exact deduplication runs first only if enabled."
+        case .taskRelevance:
+            return "Keeps required content, then adds optional blocks in order of keyword relevance to the task (manual priority, then prompt order, break ties) while the whole assembled prompt stays within the budget. Retained blocks keep their original order. Keyword matching is not semantic understanding."
         }
     }
+}
+
+/// Review criteria for the current task. Copied into each new experiment as unchecked items.
+public struct ReviewTemplate: Codable, Equatable, Hashable, Sendable {
+    public var expectedFacts: [String]
+    public var correctnessChecks: [String]
+    public init(expectedFacts: [String] = [], correctnessChecks: [String] = []) {
+        self.expectedFacts = expectedFacts; self.correctnessChecks = correctnessChecks
+    }
+    public var isEmpty: Bool { expectedFacts.isEmpty && correctnessChecks.isEmpty }
 }
 
 public struct SelectionSettings: Codable, Equatable, Hashable, Sendable {
     public static let budgetRange = 1...1_000_000
 
     public var strategy: SelectionStrategy
-    /// Token budget measured with `counter`. Enforced only by `.budgetSelection`; reported for all strategies.
+    /// Token budget for the whole assembled prompt, measured with `counter`. Enforced by the two budget
+    /// strategies; reported for all strategies.
     public var budget: Int
-    /// Only used by `.budgetSelection`: remove exact duplicates before selecting by budget.
+    /// Only used by the two budget strategies: remove exact duplicates before selecting by budget.
     public var deduplicateBeforeBudget: Bool
     public var counter: CounterChoice
 
@@ -119,11 +148,11 @@ public struct SelectionSettings: Codable, Equatable, Hashable, Sendable {
         switch strategy {
         case .baseline: return false
         case .exactDeduplication: return true
-        case .budgetSelection: return deduplicateBeforeBudget
+        case .budgetSelection, .taskRelevance: return deduplicateBeforeBudget
         }
     }
 
-    public var enforcesBudget: Bool { strategy == .budgetSelection }
+    public var enforcesBudget: Bool { strategy == .budgetSelection || strategy == .taskRelevance }
 
     public func validate() throws {
         guard Self.budgetRange.contains(budget) else {

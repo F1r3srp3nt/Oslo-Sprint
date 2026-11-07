@@ -11,12 +11,13 @@ enum StoredPreference {
 }
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case overview, workspace, library, experiments, settings
+    case overview, workspace, comparison, library, experiments, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .overview: return "Overview"
         case .workspace: return "Prompt Workspace"
+        case .comparison: return "Comparison"
         case .library: return "Context Library"
         case .experiments: return "Experiments"
         case .settings: return "Settings"
@@ -26,6 +27,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "square.grid.2x2"
         case .workspace: return "text.alignleft"
+        case .comparison: return "rectangle.split.3x1"
         case .library: return "books.vertical"
         case .experiments: return "flask"
         case .settings: return "gearshape"
@@ -35,9 +37,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "1"
         case .workspace: return "2"
-        case .library: return "3"
-        case .experiments: return "4"
-        case .settings: return "5"
+        case .comparison: return "3"
+        case .library: return "4"
+        case .experiments: return "5"
+        case .settings: return "6"
         }
     }
 }
@@ -57,6 +60,9 @@ enum AppSection: String, CaseIterable, Identifiable {
     @Published private(set) var report: SelectionReport?
     @Published private(set) var previewError: String?
     @Published private(set) var isPreviewing = false
+    @Published private(set) var comparison: [ComparisonEntry]?
+    @Published private(set) var comparisonError: String?
+    @Published private(set) var isComparing = false
     @Published var errorMessage: String?
     @Published var status = "Local session. Nothing is saved until you choose Save Project."
 
@@ -64,8 +70,14 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// Set once the user has already confirmed discarding changes while closing the window.
     var allowTerminationWithoutPrompt = false
 
-    private var previewGeneration = 0
-    private var autoPreviewTask: Task<Void, Never>?
+    // Background work: every run gets a ticket; only the latest ticket may publish a result, and
+    // superseded runs are cancelled so they stop consuming CPU.
+    private var previewGate = LatestResultGate()
+    private var comparisonGate = LatestResultGate()
+    private var previewWork: Task<Void, Never>?
+    private var comparisonWork: Task<Void, Never>?
+    private var debounceTask: Task<Void, Never>?
+    static let debounceNanoseconds: UInt64 = 400_000_000
     private var cancellables: Set<AnyCancellable> = []
 
     init(encodings: EncodingStore? = nil) {
@@ -96,65 +108,116 @@ enum AppSection: String, CaseIterable, Identifiable {
         return report
     }
     var hasStaleReport: Bool { report != nil && currentReport == nil }
+
+    /// The last comparison, only if all four variants match the current inputs and counter.
+    var currentComparison: [ComparisonEntry]? {
+        guard let comparison, let counter = activeCounterDescriptor,
+              Comparison.isCurrent(comparison, draft: document.draft, base: document.settings, counter: counter) else { return nil }
+        return comparison
+    }
+    var hasStaleComparison: Bool { comparison != nil && currentComparison == nil }
+
     var workspaceIsEmpty: Bool {
-        document.draft.instructions.isEmpty && document.draft.blocks.allSatisfy { $0.text.isEmpty }
+        document.draft.task.isEmpty && document.draft.instructions.isEmpty && document.draft.blocks.allSatisfy { $0.text.isEmpty }
     }
 
-    /// Live per-text count for editor hints, using the project's counter when it is loaded.
-    /// Large texts are not re-tokenized on every keystroke; they use the current preview's count instead.
-    func liveCountLabel(_ text: String, decision: BlockDecision? = nil) -> String {
-        guard let counter = try? encodings.resolver().counter(for: document.settings.counter) else { return "– tokens" }
-        let descriptor = counter.descriptor
-        if descriptor.kind == .approximation { return "≈ \(counter.count(text)) est. tokens" }
-        if text.utf8.count <= 20_000 { return "\(counter.count(text)) \(descriptor.encoding) tokens" }
-        if let decision { return "\(decision.standaloneTokens) \(descriptor.encoding) tokens" }
-        return "– \(descriptor.encoding) tokens (updates with preview)"
+    /// Token hint for an editor. Only the cheap approximate counter runs on the main thread; model
+    /// tokenizer counts come from the latest background preview (`known`) or are shown as pending.
+    func liveCountLabel(_ text: String, known: Int? = nil) -> String {
+        switch document.settings.counter {
+        case .approximate(let n):
+            return "≈ \(ApproximateCounter(bytesPerToken: n).count(text)) est. tokens"
+        case .bpe(let id):
+            if let known { return "\(known) \(id.rawValue) tokens" }
+            return "– \(id.rawValue) tokens (after preview)"
+        }
     }
 
-    // MARK: Preview
+    // MARK: Background preview and comparison
+
+    /// Run `work` on a background thread. Cancelling the calling task cancels the work too.
+    nonisolated static func background<T: Sendable>(_ work: @escaping @Sendable (() -> Bool) throws -> T) async -> Result<T, Error> {
+        let worker = Task.detached(priority: .userInitiated) { () -> Result<T, Error> in
+            Result { try work({ Task.isCancelled }) }
+        }
+        return await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
 
     func preview() {
-        autoPreviewTask?.cancel()
+        debounceTask?.cancel()
+        previewWork?.cancel()
         let draft = document.draft, settings = document.settings
-        previewGeneration += 1
-        let generation = previewGeneration
+        let ticket = previewGate.begin()
         isPreviewing = true
-        Task { [weak self] in
+        previewWork = Task { [weak self] in
             guard let self else { return }
             let result: Result<SelectionReport, Error>
             do {
                 let counter = try await self.encodings.counter(for: settings.counter)
-                result = await Task.detached(priority: .userInitiated) {
-                    Result { try SelectionEngine.run(draft, settings: settings, counter: counter) }
-                }.value
+                result = await Self.background { isCancelled in
+                    try SelectionEngine.run(draft, settings: settings, counter: counter, isCancelled: isCancelled)
+                }
             } catch {
                 result = .failure(error)
             }
-            self.finishPreview(generation: generation, result: result)
+            // An older or cancelled calculation never replaces a newer preview.
+            guard self.previewGate.isLatest(ticket), !Task.isCancelled else { return }
+            self.isPreviewing = false
+            switch result {
+            case .success(let report): self.report = report; self.previewError = nil
+            case .failure(let error) where error is CancellationError: break
+            case .failure(let error): self.report = nil; self.previewError = error.localizedDescription
+            }
         }
     }
 
-    private func finishPreview(generation: Int, result: Result<SelectionReport, Error>) {
-        guard generation == previewGeneration else { return } // a newer preview superseded this one
-        isPreviewing = false
-        switch result {
-        case .success(let report):
-            self.report = report
-            previewError = nil
-        case .failure(let error):
-            report = nil
-            previewError = error.localizedDescription
+    func runComparison() {
+        comparisonWork?.cancel()
+        let draft = document.draft, settings = document.settings
+        let ticket = comparisonGate.begin()
+        isComparing = true
+        comparisonWork = Task { [weak self] in
+            guard let self else { return }
+            let result: Result<[ComparisonEntry], Error>
+            do {
+                let counter = try await self.encodings.counter(for: settings.counter)
+                result = await Self.background { isCancelled in
+                    try Comparison.run(draft, base: settings, counter: counter, isCancelled: isCancelled)
+                }
+            } catch {
+                result = .failure(error)
+            }
+            guard self.comparisonGate.isLatest(ticket), !Task.isCancelled else { return }
+            self.isComparing = false
+            switch result {
+            case .success(let entries): self.comparison = entries; self.comparisonError = nil
+            case .failure(let error) where error is CancellationError: break
+            case .failure(let error): self.comparison = nil; self.comparisonError = error.localizedDescription
+            }
         }
     }
 
+    /// Inputs changed: stop and discard in-flight work, then (if enabled) recompute after a pause in typing.
     private func previewInputsChanged() {
         previewError = nil
-        autoPreviewTask?.cancel()
+        comparisonError = nil
+        previewWork?.cancel(); comparisonWork?.cancel()
+        previewGate.invalidate(); comparisonGate.invalidate()
+        isPreviewing = false; isComparing = false
+        debounceTask?.cancel()
         guard autoPreviewEnabled else { return }
-        autoPreviewTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled else { return }
-            self?.preview()
+        debounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.debounceNanoseconds)
+            guard !Task.isCancelled, let self else { return }
+            switch self.selectedSection {
+            case .comparison: self.runComparison()
+            case .workspace, .overview: self.preview()
+            default: break
+            }
         }
     }
 
@@ -250,10 +313,45 @@ enum AppSection: String, CaseIterable, Identifiable {
         guard let report = currentReport else { return fail("Update the preview first. Only a current preview can be saved as an experiment.") }
         guard document.experiments.count < ProjectDocument.maxExperiments else { return fail("A project is limited to \(ProjectDocument.maxExperiments) experiments.") }
         let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short
-        let experiment = Experiment(name: "\(report.settings.strategy.displayName) — \(formatter.string(from: Date()))", snapshot: report)
+        let experiment = Experiment(name: "\(report.settings.strategy.displayName) — \(formatter.string(from: Date()))",
+                                    snapshot: report, evaluation: Evaluation(template: document.reviewTemplate))
         document.experiments.insert(experiment, at: 0)
         selectedExperimentID = experiment.id
         status = "Saved experiment “\(experiment.name)”. Save the project to keep it."
+    }
+
+    /// Save the current four-way comparison as four linked experiment snapshots.
+    func saveComparison() {
+        guard let entries = currentComparison else { return fail("Run the comparison first. Only a current comparison can be saved.") }
+        guard document.experiments.count + entries.count <= ProjectDocument.maxExperiments else {
+            return fail("A project is limited to \(ProjectDocument.maxExperiments) experiments.")
+        }
+        let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short
+        let experiments = Comparison.experiments(from: entries, groupName: "Comparison \(formatter.string(from: Date()))",
+                                                 template: document.reviewTemplate)
+        document.experiments.insert(contentsOf: experiments, at: 0)
+        selectedExperimentID = experiments.first?.id
+        status = "Saved \(experiments.count) linked experiments. Answer quality is not evaluated until you record and review answers."
+    }
+
+    func groupMembers(of id: UUID) -> [Experiment] {
+        guard let group = document.experiments.first(where: { $0.id == id })?.comparison?.groupID else { return [] }
+        let order = ComparisonVariant.allCases
+        return document.experiments.filter { $0.comparison?.groupID == group }
+            .sorted { order.firstIndex(of: $0.comparison!.variant)! < order.firstIndex(of: $1.comparison!.variant)! }
+    }
+
+    /// Copy this experiment's full-context answer to group members that have none yet. Never overwrites.
+    func shareFullContextAnswer(from id: UUID) {
+        guard let source = document.experiments.first(where: { $0.id == id }), source.evaluation.fullContextRun.hasResponse,
+              let group = source.comparison?.groupID else { return }
+        var copied = 0, skipped = 0
+        for index in document.experiments.indices where document.experiments[index].comparison?.groupID == group && document.experiments[index].id != id {
+            if document.experiments[index].evaluation.fullContextRun.hasResponse { skipped += 1; continue }
+            document.experiments[index].evaluation.fullContextRun = source.evaluation.fullContextRun
+            copied += 1
+        }
+        status = "Copied the full-context answer to \(copied) linked experiment\(copied == 1 ? "" : "s")" + (skipped > 0 ? "; \(skipped) already had one and were not changed." : ".")
     }
 
     func experimentBinding(_ id: UUID) -> Binding<Experiment>? {
@@ -355,6 +453,13 @@ enum AppSection: String, CaseIterable, Identifiable {
         selectedSection = .workspace
     }
 
+    func loadDemo(_ id: DemoDataset.ID) {
+        guard confirmUnsavedChanges(before: "loading a demonstration") else { return }
+        replaceSession(.untitled(DemoDataset.make(id)), status: "Demonstration loaded: synthetic data, not benchmark evidence.")
+        selectedSection = .comparison
+        runComparison()
+    }
+
     func openProject() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
@@ -415,6 +520,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         session = newSession
         report = nil
         previewError = nil
+        comparison = nil
+        comparisonError = nil
         selectedLibraryID = nil
         selectedExperimentID = nil
         self.status = status

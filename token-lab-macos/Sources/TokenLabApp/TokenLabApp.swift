@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import TokenLabCore
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: AppStore?
@@ -24,7 +25,7 @@ import AppKit
     @AppStorage(StoredPreference.appearance) private var appearance = "System"
 
     var body: some Scene {
-        Window("Token Lab", id: "main") {
+        Window("Distil", id: "main") {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(store.encodings)
@@ -40,6 +41,11 @@ import AppKit
                     .keyboardShortcut("o")
                 Divider()
                 Button("Load Example Project") { store.loadExample() }
+                Menu("Load Demonstration") {
+                    ForEach(DemoDataset.ID.allCases) { id in
+                        Button(id.title) { store.loadDemo(id) }
+                    }
+                }
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Close Window") { store.requestCloseWindow(NSApp.keyWindow ?? NSApp.mainWindow) }
@@ -66,6 +72,11 @@ import AppKit
                 Button("Copy Selected Prompt") { store.copySelectedPrompt() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                     .disabled(store.currentReport == nil)
+                Divider()
+                Button("Run Comparison") { store.selectedSection = .comparison; store.runComparison() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Save Comparison as Experiments") { store.saveComparison() }
+                    .disabled(store.currentComparison == nil)
                 Divider()
                 Button("Add Context Block") { store.addWorkspaceBlock() }
                     .keyboardShortcut("n", modifiers: [.command, .option])

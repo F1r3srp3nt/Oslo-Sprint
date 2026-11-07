@@ -31,7 +31,7 @@ final class ProjectFileTests: XCTestCase {
     func testFilesAreReadableJSONWithSchemaVersion() throws {
         let data = try ProjectCodec.encode(SampleProject.make())
         let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(object?["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(object?["schemaVersion"] as? Int, 3)
     }
 
     func testMalformedFilesAreRejectedWithReadableErrors() {
@@ -61,13 +61,13 @@ final class ProjectFileTests: XCTestCase {
     }
 
     func testUnsupportedSchemaVersionsAreRejected() {
-        for version in [0, 3, 99] {
+        for version in [0, 4, 99] {
             let data = Data(#"{"schemaVersion": \#(version)}"#.utf8)
             XCTAssertThrowsError(try ProjectCodec.decode(data)) { error in
-                XCTAssertEqual(error as? LabError, .unsupportedSchema(found: version, supported: 2))
+                XCTAssertEqual(error as? LabError, .unsupportedSchema(found: version, supported: 3))
             }
         }
-        XCTAssertTrue(LabError.unsupportedSchema(found: 3, supported: 2).localizedDescription.contains("newer"))
+        XCTAssertTrue(LabError.unsupportedSchema(found: 4, supported: 3).localizedDescription.contains("newer"))
     }
 
     func testOversizedFilesAreRejected() {
@@ -125,7 +125,9 @@ final class ProjectFileTests: XCTestCase {
         let loaded = try ProjectCodec.load(Data(json.utf8))
         XCTAssertTrue(loaded.wasMigrated)
         let doc = loaded.document
-        XCTAssertEqual(doc.schemaVersion, 2)
+        XCTAssertEqual(doc.schemaVersion, 3)
+        XCTAssertEqual(doc.draft.task, "", "No task is guessed from the old instructions")
+        XCTAssertEqual(doc.draft.instructions, "Keep this.")
         XCTAssertEqual(doc.settings.budget, 50)
         XCTAssertTrue(doc.settings.deduplicateBeforeBudget)
         XCTAssertEqual(doc.draft.blocks.map(\.id), [a, b])

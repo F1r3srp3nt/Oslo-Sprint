@@ -3,10 +3,8 @@ import Foundation
 /// Synthetic example written for this project. Contains no real business data.
 public enum SampleProject {
     public static func make() -> ProjectDocument {
-        let instructions = """
-        Write a five-sentence handover note for a new team member joining the "Harbour Lights" volunteer \
-        project. Use only the facts in the supplied context. Do not invent dates, names or numbers.
-        """
+        let task = "Write a five-sentence handover note for a new team member joining the \"Harbour Lights\" volunteer project."
+        let instructions = "Use only the facts in the supplied context. Do not invent dates, names or numbers."
         let code = """
         func nextShift(after hour: Int) -> Int {
             // Shifts start every four hours, beginning at 06:00.
@@ -33,9 +31,12 @@ public enum SampleProject {
                          category: .reference, priority: ContextPriority.low)
         ]
         return ProjectDocument(
-            draft: Draft(instructions: instructions, blocks: blocks),
+            notes: "Basic example — synthetic data written for this project.",
+            draft: Draft(task: task, instructions: instructions, blocks: blocks),
             settings: SelectionSettings(strategy: .budgetSelection, budget: 170, deduplicateBeforeBudget: true,
                                         counter: .approximate(bytesPerToken: 4)),
+            reviewTemplate: ReviewTemplate(expectedFacts: ["Volunteers work in pairs on the pier", "Hi-vis vests after sunset"],
+                                           correctnessChecks: ["No invented dates, names or numbers"]),
             library: library)
     }
 }

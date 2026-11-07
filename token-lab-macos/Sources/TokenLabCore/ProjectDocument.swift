@@ -1,20 +1,26 @@
 import Foundation
 
 public struct ProjectDocument: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
     public static let maxLibraryItems = 500
     public static let maxExperiments = 500
 
     public var schemaVersion: Int
+    /// Free-text description of the project (for example a demonstration label).
+    public var notes: String
     public var draft: Draft
     public var settings: SelectionSettings
+    /// Expected facts and checks for the current task, copied into new experiments.
+    public var reviewTemplate: ReviewTemplate
     public var library: [ContextBlock]
     public var experiments: [Experiment]
 
-    public init(draft: Draft = Draft(), settings: SelectionSettings = SelectionSettings(),
+    public init(notes: String = "", draft: Draft = Draft(), settings: SelectionSettings = SelectionSettings(),
+                reviewTemplate: ReviewTemplate = ReviewTemplate(),
                 library: [ContextBlock] = [], experiments: [Experiment] = []) {
         self.schemaVersion = Self.currentSchemaVersion
-        self.draft = draft; self.settings = settings; self.library = library; self.experiments = experiments
+        self.notes = notes; self.draft = draft; self.settings = settings; self.reviewTemplate = reviewTemplate
+        self.library = library; self.experiments = experiments
     }
 
     public func validate() throws {
@@ -75,6 +81,14 @@ public enum ProjectCodec {
         case ProjectDocument.currentSchemaVersion:
             do { document = try decoder().decode(ProjectDocument.self, from: data) }
             catch { throw LabError.malformed(describe(error)) }
+        case 2:
+            // Schema 2 had no separate task. Nothing is guessed: the task starts empty everywhere and the
+            // previous instructions (which may contain the request) are kept exactly as they were.
+            let migrated: Data
+            do { migrated = try LegacyV2.upgrade(data) }
+            catch { throw LabError.malformed("schema 2 file could not be upgraded: \(error.localizedDescription)") }
+            do { document = try decoder().decode(ProjectDocument.self, from: migrated) }
+            catch { throw LabError.malformed(describe(error)) }
         case 1:
             let legacy: LegacyV1.Project
             // Schema 1 used JSONEncoder's default date format (seconds since 2001-01-01).
@@ -112,6 +126,36 @@ public enum ProjectCodec {
         case .dataCorrupted(let context): return "invalid value at \(path(context)): \(context.debugDescription)"
         @unknown default: return error.localizedDescription
         }
+    }
+}
+
+/// Schema 2 → 3: add an empty `task` to the workspace draft and to every experiment's saved input, and
+/// empty `notes` and `reviewTemplate`. Everything else, including snapshots and evaluations, is unchanged.
+enum LegacyV2 {
+    static func upgrade(_ data: Data) throws -> Data {
+        guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw LabError.malformed("not a JSON object.")
+        }
+        func addTask(_ value: Any?) -> Any? {
+            guard var draft = value as? [String: Any] else { return value }
+            if draft["task"] == nil { draft["task"] = "" }
+            return draft
+        }
+        root["draft"] = addTask(root["draft"])
+        if let experiments = root["experiments"] as? [[String: Any]] {
+            root["experiments"] = experiments.map { experiment -> [String: Any] in
+                var experiment = experiment
+                if var snapshot = experiment["snapshot"] as? [String: Any] {
+                    snapshot["input"] = addTask(snapshot["input"])
+                    experiment["snapshot"] = snapshot
+                }
+                return experiment
+            }
+        }
+        if root["notes"] == nil { root["notes"] = "" }
+        if root["reviewTemplate"] == nil { root["reviewTemplate"] = ["expectedFacts": [String](), "correctnessChecks": [String]()] }
+        root["schemaVersion"] = ProjectDocument.currentSchemaVersion
+        return try JSONSerialization.data(withJSONObject: root)
     }
 }
 

@@ -9,9 +9,11 @@ struct WorkspaceView: View {
         HSplitView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    TaskEditor()
                     InstructionsEditor()
                     SelectionSettingsPanel()
                     contextSection
+                    ReviewTemplateEditor()
                 }
                 .padding(20)
             }
@@ -69,7 +71,7 @@ struct WorkspaceView: View {
                 let decision = decisions[block.id]
                 ContextBlockEditor(
                     block: $block,
-                    tokenLabel: store.liveCountLabel(block.text, decision: decision),
+                    tokenLabel: store.liveCountLabel(block.text, known: decision?.standaloneTokens),
                     decision: decision,
                     actions: workspaceActions(for: block))
             }
@@ -119,24 +121,99 @@ struct LibraryInsertMenu: View {
     }
 }
 
+struct TaskEditor: View {
+    @EnvironmentObject private var store: AppStore
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("Current task or question", systemImage: "questionmark.bubble.fill")
+                        .font(.headline)
+                    Spacer()
+                    Text(store.liveCountLabel(store.document.draft.task, known: store.currentReport?.taskTokens))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                Text("Always kept verbatim and placed last in the prompt. Task-relevance ranking compares context against these words.")
+                    .font(.caption).foregroundStyle(.secondary)
+                CodeEditor(text: $store.document.draft.task, minHeight: 60, maxHeight: 200,
+                           accessibilityLabel: "Current task or question")
+            }
+            .padding(6)
+        }
+    }
+}
+
 struct InstructionsEditor: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Label("Protected instructions and current request", systemImage: "lock.fill")
+                    Label("Protected instructions and constraints", systemImage: "lock.fill")
                         .font(.headline)
                     Spacer()
-                    Text(store.liveCountLabel(store.document.draft.instructions))
+                    Text(store.liveCountLabel(store.document.draft.instructions, known: store.currentReport?.instructionsTokens))
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 Text("Always kept verbatim and placed first. Never shortened or removed to meet a budget.")
                     .font(.caption).foregroundStyle(.secondary)
-                CodeEditor(text: $store.document.draft.instructions, minHeight: 110,
-                           accessibilityLabel: "Protected instructions and current request")
+                CodeEditor(text: $store.document.draft.instructions, minHeight: 90,
+                           accessibilityLabel: "Protected instructions and constraints")
             }
             .padding(6)
+        }
+    }
+}
+
+/// Expected facts and checks for this task; copied as unchecked items into each new experiment.
+struct ReviewTemplateEditor: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var expanded = false
+
+    var body: some View {
+        GroupBox {
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Copied into each new experiment as unchecked items, so answers can be reviewed against the same criteria. They do not affect selection.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    LinesEditor(title: "Expected facts", placeholder: "A fact a correct answer must contain",
+                                lines: $store.document.reviewTemplate.expectedFacts)
+                    LinesEditor(title: "Correctness checks", placeholder: "A check, e.g. “No invented dates”",
+                                lines: $store.document.reviewTemplate.correctnessChecks)
+                }
+                .padding(.top, 6)
+            } label: {
+                Label("Review criteria (\(store.document.reviewTemplate.expectedFacts.count + store.document.reviewTemplate.correctnessChecks.count))",
+                      systemImage: "checklist")
+                    .font(.headline)
+            }
+            .padding(6)
+        }
+    }
+}
+
+struct LinesEditor: View {
+    let title: String
+    let placeholder: String
+    @Binding var lines: [String]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title).font(.subheadline.weight(.semibold))
+                Spacer()
+                Button { lines.append("") } label: { Label("Add", systemImage: "plus") }.controlSize(.small)
+            }
+            ForEach(lines.indices, id: \.self) { index in
+                HStack {
+                    TextField(placeholder, text: Binding(
+                        get: { lines.indices.contains(index) ? lines[index] : "" },
+                        set: { if lines.indices.contains(index) { lines[index] = $0 } }))
+                        .textFieldStyle(.roundedBorder)
+                    Button(role: .destructive) { if lines.indices.contains(index) { lines.remove(at: index) } } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Remove \(title.lowercased()) item")
+                }
+            }
         }
     }
 }
@@ -154,12 +231,20 @@ struct SelectionSettingsPanel: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Strategy", selection: $store.document.settings.strategy) {
-                    ForEach(SelectionStrategy.allCases) { Text($0.displayName).tag($0) }
+                    ForEach(SelectionStrategy.allCases) { Text($0.shortName).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Text(settings.strategy.summary)
+                .accessibilityLabel("Selection strategy")
+                Text("\(settings.strategy.displayName): \(settings.strategy.summary)")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if settings.strategy == .taskRelevance {
+                    DisclosureGroup("How task relevance works and where it fails") {
+                        RankingMethodView(taskTerms: KeywordOverlapRanker().taskTerms(store.document.draft.task))
+                            .padding(.top, 4)
+                    }
+                    .font(.caption)
+                }
                 HStack(spacing: 8) {
                     Text("Token budget")
                     TextField("Budget", value: budget, format: .number.grouping(.never))
@@ -171,7 +256,7 @@ struct SelectionSettingsPanel: View {
                          color: settings.enforcesBudget ? .blue : .secondary)
                     Spacer()
                 }
-                if settings.strategy == .budgetSelection {
+                if settings.enforcesBudget {
                     Toggle("Remove exact duplicates before applying the budget", isOn: $store.document.settings.deduplicateBeforeBudget)
                         .toggleStyle(.checkbox)
                 }
@@ -306,7 +391,7 @@ struct PreviewPanel: View {
             }
         } else if store.workspaceIsEmpty {
             ContentUnavailableView("Nothing to preview", systemImage: "text.alignleft",
-                                   description: Text("Write the instructions and add context. The preview shows exactly what would be sent and why each block was kept or removed."))
+                                   description: Text("Write the task and instructions, and add context. The preview shows exactly what would be sent and why each block was kept or removed."))
         } else {
             ContentUnavailableView {
                 Label(store.hasStaleReport ? "Preview out of date" : "No preview yet", systemImage: "arrow.clockwise")
@@ -339,11 +424,20 @@ struct ReportView: View {
                     Button { store.exportReport() } label: { Label("Export…", systemImage: "square.and.arrow.up") }
                         .help("Export this report as JSON (⌘E)")
                 }
+                if let ranker = report.ranker {
+                    DisclosureGroup("Ranking: \(ranker.displayName)") {
+                        RankingMethodView(descriptor: ranker, taskTerms: report.taskTerms).padding(.top, 4)
+                    }
+                    .font(.callout)
+                    if let note = report.relevanceNote {
+                        Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(.orange)
+                    }
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Decisions").font(.subheadline.weight(.semibold))
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: "lock.fill").foregroundStyle(.blue).frame(width: 16).accessibilityHidden(true)
-                        Text("Protected instructions — kept verbatim, first in the prompt.").font(.callout)
+                        Text("Protected instructions (first) and task (last) — kept verbatim.").font(.callout)
                     }
                     ForEach(report.decisions) { DecisionRow(decision: $0, tokenUnit: unit) }
                     if report.decisions.isEmpty {

@@ -86,11 +86,62 @@ struct DecisionRow: View {
                     Spacer(minLength: 4)
                     Text("\(decision.standaloneTokens) \(tokenUnit)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
+                if let relevance = decision.relevance {
+                    RelevanceTermsView(relevance: relevance)
+                }
                 Text(decision.reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Shows a keyword score and exactly which task terms produced it.
+struct RelevanceTermsView: View {
+    let relevance: RelevanceScore
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("Keyword score \(String(format: "%.2f", relevance.score))")
+                .font(.caption.monospacedDigit().weight(.medium))
+            if relevance.matchedTerms.isEmpty {
+                Text("· no task terms found").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("·").font(.caption).foregroundStyle(.tertiary)
+                Text(relevance.matchedTerms.map { "\($0.term) +\(String(format: "%.2f", $0.weight))\($0.occurrences > 1 ? " (×\($0.occurrences))" : "")" }
+                        .joined(separator: ", "))
+                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityLabel(relevance.matchedTerms.isEmpty
+                            ? "Keyword score 0, no task terms found"
+                            : "Keyword score \(String(format: "%.2f", relevance.score)) from \(relevance.matchedTerms.map(\.term).joined(separator: ", "))")
+    }
+}
+
+/// Plain-language description of the ranking method and its limits.
+struct RankingMethodView: View {
+    var descriptor: RankerDescriptor = KeywordOverlapRanker().descriptor
+    var taskTerms: [String]? = nil
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(descriptor.displayName) · \(descriptor.version)").font(.caption.weight(.semibold))
+            if let taskTerms {
+                Text(taskTerms.isEmpty ? "Task terms: none usable" : "Task terms: \(taskTerms.joined(separator: ", "))")
+                    .font(.caption.monospaced()).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(descriptor.method).font(.caption).fixedSize(horizontal: false, vertical: true)
+            Text("How it combines with other settings: required blocks are always kept, whatever their score. Optional blocks are considered by keyword score, then manual priority, then prompt order, and added while the whole assembled prompt fits the budget. Retained blocks keep their original order.")
+                .font(.caption).fixedSize(horizontal: false, vertical: true)
+            ForEach(descriptor.limitations, id: \.self) { limitation in
+                Label(limitation, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("A keyword match is not evidence that a block is useful or that an answer will be correct.")
+                .font(.caption.weight(.medium)).foregroundStyle(.orange)
+        }
     }
 }
 

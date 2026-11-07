@@ -1,18 +1,17 @@
-# Token Lab — native macOS prototype 0.3
+# Distil — native macOS prototype 0.4
 
-Unbranded SwiftUI desktop app for reducing unnecessary model input while keeping what a task needs, and for checking whether the answer is still useful. “Token Lab” is a temporary descriptive name. All source is newly written for this project; no company code, logos, assets, accounts or third-party packages are included.
+Distil is the working product name of an unbranded SwiftUI desktop app. It helps you send a model less unnecessary context while keeping what a task needs, and then check whether the answer is still useful. Internal identifiers are unchanged: the package `TokenLab`, the modules `TokenLabCore`/`TokenLabApp`, the executable `TokenLab` and the bundle id `dev.tokenlab.prototype`. All source is newly written for this project; no company code, logos, assets, accounts or third-party packages are included.
 
-A smaller prompt is not automatically a better prompt. Every number in the app names the counter that produced it. Estimated reductions are never presented as cost savings or as preserved answer quality.
+A smaller prompt is not automatically a better prompt. Every number names the counter that produced it. Estimated reductions are never presented as cost savings, and keyword matches are never presented as understanding or as evidence of correctness.
 
-## Open, build and run on your Mac
+## Build and run on your Mac
 
 Requirements: macOS 14 or later and Xcode 15 or later (Swift 5.9+). No dependencies, API keys or network access are needed.
 
 **Xcode**
-
-1. Open `Package.swift` in Xcode (File → Open…, or `open Package.swift`).
+1. `open Package.swift` (or File → Open… in Xcode).
 2. Choose the **TokenLab** scheme and **My Mac** as the destination.
-3. Product → Test (⌘U) runs the core tests. Product → Run (⌘R) starts the app.
+3. Product → Test (⌘U) runs the core tests. Product → Run (⌘R) starts Distil.
 
 **Terminal** (inside this folder)
 
@@ -21,130 +20,105 @@ swift test
 swift run TokenLab
 ```
 
-**Local `.app` bundle** (runs the tests, then builds and ad-hoc signs; it does not notarize, publish or install anything):
+With `swift run`, the menu bar shows the process name “TokenLab”; the window title says Distil.
+
+**Local app bundle**: `bash scripts/build-macos.sh`, then `open dist/Distil.app`. The script runs the tests, builds, bundles and ad-hoc signs the app. It does not notarize, publish or install anything.
+
+**Optional model tokenizer files**: download `o200k_base.tiktoken` or `cl100k_base.tiktoken` yourself from the addresses shown in Settings, then import the file there. A file is accepted only if its SHA-256 matches the published value. To run the reference tokenizer tests as well:
 
 ```sh
-bash scripts/build-macos.sh
-open "dist/Token Lab.app"
+TOKENLAB_ENCODINGS_DIR=/folder/with/tiktoken/files swift test
 ```
 
-### Optional: model-specific token counting
+## Demonstration sequence (about 5 minutes)
 
-The app counts with a clearly labelled approximation by default. To count `cl100k_base` or `o200k_base` text tokens:
+All three demonstrations are synthetic and labelled as such. They show behaviour, including failures. They are not benchmark evidence.
 
-1. Download the official file yourself:
-   - `https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken` (3.6 MB)
-   - `https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken` (1.7 MB)
-2. In the app, go to Settings → Model tokenizer files → Import File….
-3. The file is accepted only if its SHA-256 matches the value published in tiktoken (shown in Settings). It is copied to `~/Library/Application Support/TokenLab/Encodings/`.
-4. Switch the project counter in Settings → Token counting for this project.
+1. Choose File → Load Demonstration → **Coding task with duplicates and noise**. Distil opens the Comparison view and runs all four configurations.
+   - **Manual-priority budget** keeps the unrelated high-priority “Release checklist” and drops the bug discussion.
+   - **Task-relevance budget** keeps the discussion and the source, but drops “Parser requirements”, which states three of the four expected facts.
+   - The lunch thread scores on “date” and “test”: a keyword trap.
+   - Click any block row to read each configuration's reason.
+2. Choose **Save as Experiments**. Four linked snapshots appear in Experiments, each marked **Not evaluated**, with the task's expected facts and checks copied in.
+3. In one experiment, open Evaluation, paste a full-context answer, and use **Copy Full-Context Answer to Linked Experiments**. This only fills experiments that are still empty.
+4. Load **Constraint that must be marked required**. The approval rule is kept in every column. In the Workspace, untick Required on “Approval rule” and set the budget to 110: the rule is dropped, and an unrelated carrier notice is kept instead.
+5. Load **Paraphrased task (keyword-ranking weakness)**. Task relevance keeps the newsletter, which repeats the task's words, and drops both blocks that actually explain the problem. Manual priority keeps those two blocks.
+6. Open Prompt Workspace → strategy **Relevance** → “How task relevance works and where it fails” to see the method, the task terms and the method's limitations.
 
-To run the reference-tokenizer tests too, either import the files in the app first, or run:
+## What changed in 0.4
 
-```sh
-TOKENLAB_ENCODINGS_DIR=/path/to/folder/with/tiktoken/files swift test
-```
+- **Explicit task field.** The draft now has three separate parts:
+  - **Current task or question**: protected and verbatim, placed last in the prompt.
+  - **Protected instructions and constraints**: protected and verbatim, placed first.
+  - **Context blocks**: optional unless marked required, kept in their original order.
 
-## What works
-
-**Five sections** in a sidebar (⌘1–⌘5): Overview, Prompt Workspace, Context Library, Experiments, Settings (also ⌘,).
-
-- **Overview**: project name, file location, saved/unsaved state, counts (required blocks, library items in use, evaluated experiments), current settings, current-preview summary, recent experiments and entry points.
-- **Prompt Workspace**: a resizable split view.
-  - The left column holds the protected instructions and current request, the strategy picker, budget, deduplication toggle and counter, and the context blocks. Each block has a title, category, required flag, priority, reorder, duplicate, copy-to-library and delete actions.
-  - The right column is the preview. It shows the full-context and selected token counts, the budget status, one decision per block with its reason, the selected prompt, the full-context prompt, Copy, Save as Experiment and Export.
-  - Previews update automatically after edits; you can turn this off. Results are hidden the moment any input, setting or counter changes.
-- **Context Library**: toolbar search, category filter, editor, duplicate, delete and insert into the workspace. Inserted copies are independent and remember which library item they came from.
-- **Experiments**: complete snapshots of inputs, settings, counter descriptor, engine version and both prompts, with three tabs:
-  - **Snapshot**: recorded settings, decisions, and the full and selected prompts side by side.
-  - **Evaluation**: answers for both variants, entered manually, plus provider-reported usage, kept separate from estimates. It has expected facts and correctness checks judged per variant, a reviewer, notes and a verdict. The verdict stays “Not evaluated” until a selected-context answer exists.
-  - **Reproducibility**: re-runs the snapshot and lists any differences.
-
-  You can also restore an experiment's inputs to the workspace and export an experiment.
-- **Settings**: appearance, the project counter (approximate with configurable bytes per token, or an imported model tokenizer), tokenizer file import, removal and verification, auto-preview, local-data summary with reset and reveal actions, and build information.
-
-**Engine** (`TokenLabCore`, no UI dependencies):
-
-- **Strategies**:
-  - **A. Baseline** keeps everything.
-  - **B. Exact deduplication** removes only optional blocks that are byte-identical to the instructions, a required block, or a higher-priority or earlier copy.
-  - **C. Budget selection** adds optional blocks by priority, with ties broken by prompt order, while the total stays within the budget. Exact deduplication runs first only if you enable it.
-- **Protected content**: instructions and required blocks are always kept verbatim and never truncated. If they exceed the budget, the report says so and shows by how much. Strategies A and B report the budget but do not apply it.
-- **Order and formatting**: retained blocks keep their original order. Text is never rewritten, and whitespace, tabs and CRLF are preserved.
-- **Explanations**: every block gets a reason. Duplicates name the block they duplicate.
-- **Determinism**: the same inputs, settings and counter always produce the same report.
-
-**Token counting** through a replaceable `TokenCounter` protocol:
-
-- `ApproximateCounter`: UTF-8 bytes ÷ N, labelled as an approximation.
-- `BPETokenizer`: a tiktoken-compatible byte-pair encoder written for this project, equivalent to `encode_ordinary`. It's verified against the official tiktoken package; see Verification.
-- Every report records the counter's id, encoding, version (including the vocabulary hash) and scope. Counts are never called “exact”: they exclude chat message formatting and provider overhead.
-
-**Project files** (versioned JSON, schema 2):
-
-- Save writes to the current file and Save As asks for a location. The app warns before saving or exporting text that looks like a credential.
-- Open validates the whole file before anything is replaced. A bad file leaves the current project untouched, with an error naming the problem.
-- Schema 1 files from the 0.2 skeleton are migrated and opened as untitled, so the original file isn't overwritten. Newer or unknown schemas are refused.
-- Unsaved changes prompt Save / Don't Save / Cancel before New, Open, Load Example, closing the window and Quit. A cancelled or failed save never discards work. The window's close button shows the “edited” dot.
-- Experiment snapshots load even after the engine changes, because reproducibility is checked on request rather than at load time.
-
-**Provider adapter interface**: `ModelProviderAdapter`, `ProviderRequest`/`ProviderResponse` and `CredentialSource` are defined. No adapter is implemented, no network calls are made and no keys are requested.
+  The assembled prompt is the instructions, then the retained blocks in original order, then the task. Parts are joined by a blank line and nothing is rewritten.
+- **Schema 3 with migration.**
+  - Schema 2 files get an empty task. Their previous instructions are kept exactly as they were, with no attempt to split out a request.
+  - Experiments keep their snapshots, answers, checks, notes and verdicts.
+  - Migrated files open as untitled, so the original file is never overwritten.
+  - Schema 1 files still migrate. Unknown and newer versions are refused.
+- **Task-relevance strategy**, alongside Full context, Exact deduplication and Manual-priority budget.
+  - **Ranking** (`RelevanceRanker` protocol, `KeywordOverlapRanker`): a deterministic local keyword-overlap score with IDF weights. Every block shows the task terms that contributed to its score and their weights.
+  - **Selection**: required blocks are always kept. Optional blocks are considered by score, then manual priority, then prompt order, and added while the **whole assembled prompt** fits the budget.
+  - **Zero matches**: blocks with no matching terms aren't removed for that reason. They're considered after every matching block.
+  - **Ties**: equal scores are resolved by priority, then position, and the reason says so.
+  - **No shortening**: blocks are never shortened, and the method's limitations are shown next to every ranking.
+  - **Separation**: ranking, counting and selection are separate, injected components, so a stronger ranker can replace this one. The ranker's id and version are recorded in each report.
+- **Comparison view.** The four configurations run on the same input, budget and counter. It shows input tokens, the counter's identity, the estimated change from full context, retained/excluded counts, budget overflow, and a block-by-configuration decision matrix with reasons. Every column says “Not evaluated” until real answers are reviewed. **Save as Experiments** stores four linked, reproducible snapshots.
+- **Review criteria per task.** Expected facts and correctness checks are copied as unchecked items into each new experiment. They have no effect on selection.
+- **Slow work kept off the UI thread.**
+  - Previews and comparisons run on background tasks and are debounced (400 ms).
+  - Superseded runs are cancelled cooperatively; the engine checks for cancellation between blocks.
+  - Every run carries a ticket from `LatestResultGate`, so an older calculation can never replace a newer result. Editing inputs invalidates in-flight work immediately.
+  - Model-tokenizer counts are no longer computed on the main thread: editors show the count from the latest background preview.
+- **Distil naming** in the window title, bundle display name and interface. There is no logo.
 
 ## Verification status
 
 | Check | Where | Result |
 |---|---|---|
 | `TokenLabCore` + tests compile | Linux, Swift 5.10.1 (official toolchain image) | Pass, no warnings |
-| `swift test` (60 tests) with official encoding files | Linux, Swift 5.10.1 | 60 passed, 0 failed |
-| `swift test` without encoding files | Linux, Swift 5.10.1 | 57 passed, 3 skipped (reference tests) |
-| BPE tokenizer vs official tiktoken 0.14.0, 4,000 random strings × 2 encodings | Linux | 0 mismatches |
-| Encoding files' SHA-256 vs values in tiktoken source | Linux | Match |
-| **SwiftUI app compiles** | — | **Not verified (needs macOS)** |
-| **App launches, windows, dialogs, menus, layout** | — | **Not verified (needs macOS)** |
-| Core tests on macOS (Foundation/ICU there differ from Linux) | — | Not verified |
+| `swift test` with official encoding files | Linux, Swift 5.10.1 | **84 passed, 0 failed** |
+| `swift test` without encoding files | Linux, Swift 5.10.1 | 81 passed, 3 skipped |
+| BPE tokenizer vs tiktoken 0.14.0 (0.3; tokenizer unchanged since) | Linux | 0 mismatches on 8,000 comparisons |
+| **SwiftUI app compiles** | — | **Not verified. Needs a Mac.** Reviewed by reading the code only. |
+| **Launch, windows, menus, dialogs, layout, responsiveness** | — | **Not verified. Needs a Mac.** |
+| Core tests on macOS (Foundation and the ICU regex library differ there) | — | Not verified |
 
-## Defaults chosen (all reversible)
+## Known limitations
 
-- **Tokenizer files are imported, not bundled.** The app makes no network requests and the repository contains no third-party data files. The SHA-256 check ensures only official files are used.
-- **No deduplication inside budget selection by default.** This keeps the strategies separate. The sample project enables it to demonstrate both behaviours.
-- **Approximate counter is 4 bytes per token by default.** It's configurable from 1 to 8.
-- **Greedy budget selection.** A smaller lower-priority block can be kept after a larger higher-priority block didn't fit, and the reason says so.
-- **Empty blocks are skipped under every strategy**, including empty required blocks, because they add no text.
-- **Copying a block to the library clears its required flag.**
-- **Model names appear only in Settings**, as factual tokenizer mappings from tiktoken 0.14.0. Remove them if the competition rules prefer no vendor names at all.
+- **Keyword ranking.** It matches exact words only: no synonyms, paraphrases, stemming (“date” ≠ “dates”) or translation. The paraphrase demonstration fails by design, so you can see this.
+- **Greedy budget filling.** A smaller, lower-ranked block can fill space that a larger, more relevant block couldn't use. Every reason states this.
+- **English stop words only.** Text in other languages is still matched word for word.
+- **Main-thread file handling.** Opening and saving projects is still done on the main thread, which may pause for very large (20 MB) files.
+- **Manual answers only.** Answers and provider usage are entered by hand; no model is called.
+- **Demonstration budgets.** These were chosen before results were known and are deliberately small. They aren't a measurement of anything.
 
 ## First-launch acceptance checklist (on your Mac)
 
-1. `swift test` passes, or skips only the three reference tests if no encoding files are present. Xcode builds and runs the TokenLab scheme with no errors.
-2. The window opens with five sidebar sections, and ⌘1–⌘5 switch between them. Theme follows System, Light and Dark in Settings.
-3. Overview → Load Example Project. The workspace preview shows:
-   - Safety rules and Shift helper as **Required**.
-   - Current status as **Kept**.
-   - Status (pasted again) as **Duplicate** of “Current status”.
-   - Timer log as **Over budget**.
-   - Volunteer chat as **Kept**.
-
-   Reasons are shown on each row.
-4. Type in any block, then change the strategy, the budget and the dedupe toggle. The old result disappears straight away and the new one appears; with Auto-update off it shows “Preview out of date”.
-5. Set the budget to 1. Protected instructions and both required blocks remain verbatim (check the tab in the code block), and the banner says protected content is over budget and was not truncated.
-6. Switch to Baseline, then to Exact deduplication. The budget is shown as “Reported only” and the summary says the budget is not applied.
-7. Library: create, search, filter by category, Insert into Workspace. Edit the workspace copy and confirm the library item is unchanged.
-8. Save as Experiment (⇧⌘E). Then edit the workspace and confirm the experiment's Snapshot is unchanged. Evaluation: the verdict is disabled until you paste a selected-context answer. Enter provider input tokens for both variants and the provider-reported reduction appears separately from the estimate. Reproducibility → Re-run shows “Reproduced exactly”.
-9. Save (⌘S), quit, relaunch, Open (⌘O). Everything round-trips, including the experiment evaluation.
-10. Open a non-JSON file, `{}`, and a file with `"schemaVersion": 99`. Each shows an error and the current project is unchanged.
-11. With unsaved changes, try New, Open, Load Example, the red close button, ⌘W and ⌘Q. Each asks Save / Don't Save / Cancel. Cancel keeps everything, and cancelling the Save panel also keeps everything.
-12. Optional: import `o200k_base.tiktoken` (a wrong file should be rejected), switch the counter, and confirm metrics say “o200k_base text tokens” and the experiment records the encoding and version.
-13. Accessibility and layout: navigate with Tab and VoiceOver. Shrink the window to about 760×520 and drag both split dividers.
+1. `swift test` passes; only the 3 reference tests skip if no encoding files are present. Xcode builds and runs with no errors. The window title reads **Distil**.
+2. The sidebar has six sections, switched with ⌘1–⌘6. Settings also opens with ⌘,.
+3. Follow the demonstration sequence above; each outcome should match what it describes.
+4. Workspace: edit the task. The preview hides at once and refreshes after a short pause. Typing quickly in a long block never shows an older result.
+5. Set the budget to 1 with the Relevance strategy. The task, the instructions and the required blocks remain verbatim (check the tab characters in code), and the banner reports the overflow.
+6. Save, quit, relaunch and reopen the project: the task, review criteria, comparison groups and evaluations all round-trip.
+7. Open a 0.3 (schema 2) project. It opens as untitled with an empty task and unchanged instructions and experiments.
+8. With unsaved changes, New, Open, Load Demonstration, the close button, ⌘W and ⌘Q each ask Save / Don't Save / Cancel.
+9. VoiceOver reads the strategy picker, decision rows and keyword scores. Shrink the window to about 760×520 and drag both split dividers.
 
 ## Layout
 
-- `Sources/TokenLabCore`:
-  - `Models`: blocks, draft, strategies, settings, errors.
-  - `SelectionEngine`
+- **`Sources/TokenLabCore`**: no UI.
+  - `Models`: draft (task, instructions, blocks), strategies, settings, review template.
+  - `SelectionEngine`, plus `LatestResultGate`.
+  - `Relevance`: the ranker protocol and keyword ranker.
+  - `Comparison`
   - `TokenCounting`, `BPETokenizer`, `SHA256`
-  - `Evaluation`: experiments, review checks, provider usage, reproduction.
-  - `ProjectDocument`: schema, codec, v1 migration.
-  - `ProjectSession`: unsaved-change rules.
-  - `SecretScanner`, `ProviderAdapter`, `SampleProject`
-- `Sources/TokenLabApp`: SwiftUI views, `AppStore`, `EncodingStore`, native dialogs and the window-close guard. This target is built only on macOS.
-- `Tests/TokenLabCoreTests`: engine, tokenizer, project-file, session, evaluation and secret-scanner tests. All examples are synthetic.
+  - `Evaluation`
+  - `ProjectDocument`: schema 3 and the 2→3 and 1→3 migrations.
+  - `ProjectSession`
+  - `DemoDataset`, `SampleProject`
+  - `SecretScanner`, `ProviderAdapter`
+- **`Sources/TokenLabApp`**: SwiftUI views and the store. Built on macOS only.
+- **`Tests/TokenLabCoreTests`**: 84 tests covering the engine, ranking, ties, zero matches, protected content, assembly order, comparison, migrations, stale and cancelled results, demonstrations, the tokenizer, project files, sessions, evaluation and secret scanning.

@@ -78,6 +78,13 @@ public struct Evaluation: Codable, Equatable, Sendable {
         verdict = .notEvaluated; reviewer = ""; reviewerNotes = ""; evaluatedAt = nil
     }
 
+    /// A fresh, unevaluated record with the task's review criteria as unchecked items.
+    public init(template: ReviewTemplate) {
+        self.init()
+        expectedFacts = template.expectedFacts.map { ReviewCheck(text: $0) }
+        correctnessChecks = template.correctnessChecks.map { ReviewCheck(text: $0) }
+    }
+
     /// A verdict can only be recorded once there is a selected-context answer to judge.
     public var canRecordVerdict: Bool { selectedContextRun.hasResponse }
 
@@ -132,10 +139,13 @@ public struct Experiment: Identifiable, Codable, Equatable, Sendable {
     public var createdAt: Date
     public var snapshot: SelectionReport
     public var evaluation: Evaluation
+    /// Set when the experiment was saved as part of a four-way comparison.
+    public var comparison: ComparisonMembership?
 
-    public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), snapshot: SelectionReport, evaluation: Evaluation = Evaluation()) {
+    public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), snapshot: SelectionReport,
+                evaluation: Evaluation = Evaluation(), comparison: ComparisonMembership? = nil) {
         self.id = id; self.name = name; self.createdAt = ProjectCodec.wholeSeconds(createdAt)
-        self.snapshot = snapshot; self.evaluation = evaluation
+        self.snapshot = snapshot; self.evaluation = evaluation; self.comparison = comparison
     }
 
     /// Structural checks for persisted experiments. Does not re-run the engine: snapshots stay
@@ -156,6 +166,9 @@ public struct Experiment: Identifiable, Codable, Equatable, Sendable {
         guard snapshot.selectedPrompt == SelectionEngine.assemble(snapshot.input, keeping: kept) else {
             throw LabError.invalid("Experiment “\(name)” has a selected prompt that does not match its recorded decisions.")
         }
+        if let comparison, comparison.variant.strategy != snapshot.settings.strategy {
+            throw LabError.invalid("Experiment “\(name)” is labelled \(comparison.variant.label) but used \(snapshot.settings.strategy.displayName).")
+        }
         try evaluation.validate()
     }
 }
@@ -168,17 +181,19 @@ public enum ReproductionResult: Equatable, Sendable {
 }
 
 public enum ReproductionCheck {
-    public static func run(_ experiment: Experiment, resolver: TokenCounterResolver) -> ReproductionResult {
+    public static func run(_ experiment: Experiment, resolver: TokenCounterResolver,
+                           ranker: any RelevanceRanker = KeywordOverlapRanker()) -> ReproductionResult {
         let snapshot = experiment.snapshot
         let counter: any TokenCounter
         do { counter = try resolver.counter(for: snapshot.settings.counter) }
         catch { return .counterUnavailable(error.localizedDescription) }
         let rerun: SelectionReport
-        do { rerun = try SelectionEngine.run(snapshot.input, settings: snapshot.settings, counter: counter) }
+        do { rerun = try SelectionEngine.run(snapshot.input, settings: snapshot.settings, counter: counter, ranker: ranker) }
         catch { return .differs(["The saved inputs no longer pass validation: \(error.localizedDescription)"]) }
         var differences: [String] = []
         if rerun.engineVersion != snapshot.engineVersion { differences.append("Engine version: saved \(snapshot.engineVersion), now \(rerun.engineVersion).") }
         if rerun.counter != snapshot.counter { differences.append("Counter: saved “\(snapshot.counter.id) \(snapshot.counter.version)”, now “\(rerun.counter.id) \(rerun.counter.version)”.") }
+        if let saved = snapshot.ranker, saved != rerun.ranker { differences.append("Ranker: saved “\(saved.version)”, now “\(rerun.ranker?.version ?? "none")”.") }
         if rerun.selectedPrompt != snapshot.selectedPrompt { differences.append("The selected prompt text differs.") }
         if rerun.decisions.map(\.kind) != snapshot.decisions.map(\.kind) { differences.append("Keep/remove decisions differ.") }
         if rerun.originalTokens != snapshot.originalTokens || rerun.selectedTokens != snapshot.selectedTokens {
