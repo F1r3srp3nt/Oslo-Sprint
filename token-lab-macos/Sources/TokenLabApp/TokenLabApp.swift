@@ -7,7 +7,7 @@ import AppKit
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched with `swift run`, which starts a bare executable rather than an app bundle.
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
