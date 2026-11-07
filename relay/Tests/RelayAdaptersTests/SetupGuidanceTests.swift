@@ -65,10 +65,12 @@ final class ErrorClassificationTests: XCTestCase {
 
     func testInvalidKeyAndMissingPermissionAreDistinguishedOnAccountCheck() {
         var readiness = ElevenLabsReadiness(keySaved: true, voiceIDSet: false)
+        readiness.apply(.accountCheckStarted)
         readiness.apply(.accountCheckFinished(.failure(.rejected(classify(401, #"{"detail":{"code":"invalid_api_key"}}"#))), at: Date()))
         guard case let .failed(invalid) = readiness.account else { return XCTFail("invalid key must fail") }
         XCTAssertTrue(invalid.title.contains("did not accept"))
 
+        readiness.apply(.accountCheckStarted)
         readiness.apply(.accountCheckFinished(.failure(.rejected(classify(403, #"{"detail":{"code":"insufficient_permissions"}}"#))), at: Date()))
         guard case let .attention(limited) = readiness.account else { return XCTFail("missing user_read is attention, not failure") }
         XCTAssertTrue(limited.title.contains("key is valid"))
@@ -103,6 +105,7 @@ final class ReadinessTests: XCTestCase {
 
     func testAccountCheckDoesNotProveSpeech() {
         var r = ElevenLabsReadiness(keySaved: true, voiceIDSet: true)
+        r.apply(.accountCheckStarted)
         r.apply(.accountCheckFinished(.success(()), at: Date()))
         XCTAssertTrue(r.account.isPassed)
         XCTAssertEqual(r.speechInput, .notChecked)
@@ -124,6 +127,7 @@ final class ReadinessTests: XCTestCase {
 
     func testChangesResetOnlyWhatTheyAffect() {
         var r = ElevenLabsReadiness(keySaved: true, voiceIDSet: true)
+        r.apply(.accountCheckStarted)
         r.apply(.accountCheckFinished(.success(()), at: Date()))
         r.apply(.speechInputFinished(.success("a"), at: Date()))
         r.apply(.speechOutputFinished(.success(()), at: Date()))
@@ -145,6 +149,27 @@ final class ReadinessTests: XCTestCase {
         XCTAssertEqual(r.speechOutput, .notChecked)
         XCTAssertEqual(r.synthesizerStatus, .unconfigured)
         XCTAssertEqual(r.summary, "Speech not set up — typing works")
+    }
+
+    func testStaleAccountCheckCannotVerifyAReplacedKey() {
+        var r = ElevenLabsReadiness(keySaved: true, voiceIDSet: false)
+        r.apply(.accountCheckStarted)
+        r.apply(.keySaved) // key replaced while the old check is in flight
+        r.apply(.accountCheckFinished(.success(()), at: Date()))
+        XCTAssertEqual(r.account, .notChecked, "the old key's result must not count for the new key")
+        r.apply(.accountCheckFinished(.success(()), at: Date()))
+        XCTAssertEqual(r.account, .notChecked, "a result for a check that was never started is ignored")
+    }
+
+    func testGrantingMicrophoneClearsTheDeniedResult() {
+        var r = ElevenLabsReadiness(keySaved: true, voiceIDSet: false)
+        r.apply(.speechInputBlocked(.microphoneDenied))
+        r.apply(.microphone(.granted))
+        XCTAssertEqual(r.speechInput, .notChecked)
+        let credits = ElevenLabsRejection(kind: .creditsExhausted, httpStatus: 402, code: nil, type: nil, message: "", requestID: nil)
+        r.apply(.speechInputFinished(.failure(.rejected(credits)), at: Date()))
+        r.apply(.microphone(.granted))
+        XCTAssertNotNil(r.speechInput.problem, "other failures are kept")
     }
 
     func testMicrophoneIsTrackedSeparatelyAndBlocksInputTest() {

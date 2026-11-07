@@ -448,7 +448,7 @@ private struct VoiceStep: View {
             VStack(alignment: .leading, spacing: 6) {
                 AdaptiveRow {
                     Button { model.testVoice() } label: { Label("Test voice", systemImage: "speaker.wave.2") }
-                        .disabled(!model.keySaved || !model.readiness.voiceIDSet || model.isSpeaking || model.isRecording
+                        .disabled(!model.keySaved || !model.readiness.voiceIDSet || !model.canStartSpeechTest
                                   || model.readiness.speechOutput == .checking)
                     if model.isSpeaking {
                         Button { model.stopSpeaking() } label: { Label("Stop playback", systemImage: "stop.fill") }
@@ -470,6 +470,7 @@ private struct VoiceStep: View {
             }
         }
         .onAppear { if voiceDraft.isEmpty { voiceDraft = model.elevenLabs.voiceID } }
+        .onChange(of: model.elevenLabs.voiceID) { _, newValue in voiceDraft = newValue }
     }
 
     private func save() {
@@ -543,13 +544,15 @@ private struct SpeechInputStep: View {
         switch model.inputTestPhase {
         case .idle:
             Button { model.testSpeechInput() } label: { Label("Test speech input (record 3 s)", systemImage: "mic") }
-                .disabled(!model.keySaved || model.isRecording || model.isSpeaking)
+                .disabled(!model.keySaved || !model.canStartSpeechTest)
         case let .recording(until):
             TimelineView(.periodic(from: .now, by: 0.25)) { context in
                 let remaining = max(0, until.timeIntervalSince(context.date))
                 Label(String(format: "Recording — speak now (%.0f s)", remaining.rounded(.up)), systemImage: "record.circle")
                     .foregroundStyle(Theme.danger)
             }
+        case .preparing:
+            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Preparing microphone…") }
         case .transcribing:
             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Transcribing…") }
         }
@@ -608,6 +611,10 @@ private struct ModelPicker: View {
     let choices: [ModelChoice]
     @Binding var selection: String
 
+    private var note: String {
+        choices.first(where: { $0.id == selection })?.note ?? "Custom value set under Advanced."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Picker(title, selection: $selection) {
@@ -617,7 +624,7 @@ private struct ModelPicker: View {
                 }
             }
             .frame(maxWidth: 480)
-            Text(explanation + " " + (choices.first { $0.id == selection }?.note ?? "Custom value set under Advanced."))
+            Text(explanation + " " + note)
                 .font(.caption).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -201,6 +201,10 @@ final class AppModel: ObservableObject {
 
     // MARK: Speech — setup and readiness
 
+    /// Bumped whenever the key, voice, model or format changes. Results of requests started under
+    /// an older generation are discarded, so they can't mark the new settings as tested.
+    private var settingsGeneration = 0
+
     private var client: ElevenLabsClient {
         let store = credentials
         return ElevenLabsClient(configuration: elevenLabs, apiKey: {
@@ -234,6 +238,7 @@ final class AppModel: ObservableObject {
         do {
             try CredentialAccess.save(trimmed, account: CredentialAccount.elevenLabsAPIKey, to: credentials)
             apiKeyDisplay = CredentialAccess.masked(trimmed)
+            settingsGeneration += 1
             readiness.apply(.keySaved)
             log.record(.settings, .info, replacing ? "ElevenLabs API key replaced in the Keychain (not verified yet)"
                                                    : "ElevenLabs API key saved to the Keychain (not verified yet)")
@@ -248,6 +253,7 @@ final class AppModel: ObservableObject {
         do {
             try credentials.delete(CredentialAccount.elevenLabsAPIKey)
             apiKeyDisplay = "Not set"
+            settingsGeneration += 1
             readiness.apply(.keyRemoved)
             log.record(.settings, .info, "ElevenLabs API key removed from the Keychain")
         } catch {
@@ -261,8 +267,10 @@ final class AppModel: ObservableObject {
         readiness.apply(.accountCheckStarted)
         log.record(.speech, .attempted, "Account check: GET /v1/user")
         let speechClient = client
+        let generation = settingsGeneration
         Task {
             let result = await speechClient.checkAccount()
+            guard generation == settingsGeneration else { return } // key changed meanwhile; core also ignores it
             readiness.apply(.accountCheckFinished(result, at: Date()))
             switch readiness.account {
             case .passed: log.record(.speech, .succeeded, "Account check passed (this does not test speech)")
@@ -297,6 +305,7 @@ final class AppModel: ObservableObject {
     }
 
     private func configurationChanged(from old: ElevenLabsConfiguration) {
+        if old != elevenLabs { settingsGeneration += 1 }
         if old.voiceID != elevenLabs.voiceID {
             readiness.apply(.voiceIDChanged(isSet: !elevenLabs.voiceID.isEmpty))
         }
@@ -337,67 +346,90 @@ final class AppModel: ObservableObject {
 
     enum InputTestPhase: Equatable {
         case idle
+        /// Waiting for microphone permission / starting the recorder.
+        case preparing
         case recording(until: Date)
         case transcribing
     }
 
     @Published private(set) var inputTestPhase: InputTestPhase = .idle
     private var inputTestTask: Task<Void, Never>?
+    private var inputTestToken = UUID()
     static let voiceTestSample = "Hello. This is Relay's voice test."
     static let inputTestSeconds: Double = 3
 
     /// Records a few seconds and sends them to speech-to-text. Explicit user action only.
     func testSpeechInput() {
-        guard readiness.keySaved, inputTestPhase == .idle, voice.state == .idle else { return }
+        guard readiness.keySaved, canStartSpeechTest else { return }
+        if case .failed = voice.state { dismissVoiceError() }
         stopSpeaking()
+        let token = UUID()
+        inputTestToken = token
+        inputTestPhase = .preparing
+        let generation = settingsGeneration
         inputTestTask = Task {
+            // Every write below first checks that this test is still the current one.
             guard await AudioRecorder.requestPermission() else {
                 refreshMicrophone()
-                readiness.apply(.speechInputBlocked(.microphoneDenied))
-                log.record(.speech, .failed, "Speech input test: microphone access denied")
+                if isCurrentInputTest(token) {
+                    readiness.apply(.speechInputBlocked(.microphoneDenied))
+                    log.record(.speech, .failed, "Speech input test: microphone access denied")
+                }
+                finishInputTest(token)
                 return
             }
             refreshMicrophone()
+            guard isCurrentInputTest(token), !isRecording else { finishInputTest(token); return }
             do { try recorder.start() } catch {
                 readiness.apply(.speechInputBlocked(.recording(String(describing: error))))
+                finishInputTest(token)
                 return
             }
             inputTestPhase = .recording(until: Date().addingTimeInterval(Self.inputTestSeconds))
             log.record(.speech, .info, "Speech input test: recording \(Int(Self.inputTestSeconds)) seconds")
             try? await Task.sleep(nanoseconds: UInt64(Self.inputTestSeconds * 1_000_000_000))
-            guard let recording = recorder.stop() else { inputTestPhase = .idle; return }
-            defer { try? FileManager.default.removeItem(at: recording.url) }
-            if Task.isCancelled {
-                inputTestPhase = .idle
-                log.record(.speech, .info, "Speech input test cancelled before sending")
+            guard isCurrentInputTest(token), let recording = recorder.stop() else {
+                finishInputTest(token)
                 return
             }
+            defer { try? FileManager.default.removeItem(at: recording.url) }
             inputTestPhase = .transcribing
             readiness.apply(.speechInputStarted)
             let transcriber = ElevenLabsTranscriber(client: client)
             log.record(.speech, .attempted, "Speech input test: sending audio to \(transcriber.providerName)")
+            let outcome: Result<String, ElevenLabsError>
             do {
                 let audio = try Data(contentsOf: recording.url)
                 let transcript = try await transcriber.transcribe(audio: audio, filename: "relay-input-test.m4a",
                                                                   mimeType: "audio/mp4", languageHint: languageHint)
-                readiness.apply(.speechInputFinished(.success(transcript.text), at: Date()))
-                log.record(.speech, .succeeded, "Speech input test passed")
+                outcome = .success(transcript.text)
             } catch {
-                if Task.isCancelled || error is CancellationError {
-                    readiness.apply(.speechInputSettingsChanged) // back to "not checked"
-                } else {
-                    readiness.apply(.speechInputFinished(.failure(Self.asElevenLabsError(error)), at: Date()))
-                    log.record(.speech, .failed, "Speech input test failed: \(readiness.speechInput.problem?.title ?? "")")
-                }
+                outcome = .failure(Self.asElevenLabsError(error))
             }
-            inputTestPhase = .idle
+            guard isCurrentInputTest(token), generation == settingsGeneration else {
+                // Cancelled, superseded, or the settings changed meanwhile: the result no longer applies.
+                if readiness.speechInput == .checking, inputTestToken == token { readiness.apply(.speechInputSettingsChanged) }
+                finishInputTest(token)
+                return
+            }
+            readiness.apply(.speechInputFinished(outcome, at: Date()))
+            switch outcome {
+            case .success: log.record(.speech, .succeeded, "Speech input test passed")
+            case .failure: log.record(.speech, .failed, "Speech input test failed: \(readiness.speechInput.problem?.title ?? "")")
+            }
+            finishInputTest(token)
         }
     }
 
+    private func isCurrentInputTest(_ token: UUID) -> Bool { inputTestToken == token && !Task.isCancelled }
+
+    private func finishInputTest(_ token: UUID) { if inputTestToken == token { inputTestPhase = .idle } }
+
     func cancelSpeechInputTest() {
+        inputTestToken = UUID() // the running task stops writing state
         inputTestTask?.cancel()
         inputTestTask = nil
-        recorder.cancel()
+        if case .recording = inputTestPhase { recorder.cancel() }
         if readiness.speechInput == .checking { readiness.apply(.speechInputSettingsChanged) }
         inputTestPhase = .idle
     }
@@ -414,6 +446,14 @@ final class AppModel: ObservableObject {
     // MARK: Speech — push to talk
 
     var isRecording: Bool { if case .recording = voice.state { return true } else { return false } }
+
+    /// Tests may start only when nothing else is using the microphone or speaker, and no transcript
+    /// is waiting for review.
+    var canStartSpeechTest: Bool {
+        guard inputTestPhase == .idle else { return false }
+        if case .failed = voice.state { return true }
+        return voice.state == .idle
+    }
     var isSpeaking: Bool { voice.state == .speaking }
 
     /// ElevenLabs takes ISO 639 codes; Relay's Norwegian training text is bokmål ("nb"), sent as "no".
@@ -467,6 +507,7 @@ final class AppModel: ObservableObject {
         }
         let transcriber = ElevenLabsTranscriber(client: client)
         let hint = languageHint
+        let generation = settingsGeneration
         log.record(.speech, .attempted, String(format: "Sending %.1fs of audio to %@", recording.duration, transcriber.providerName))
         Task {
             defer { try? FileManager.default.removeItem(at: recording.url) }
@@ -474,14 +515,18 @@ final class AppModel: ObservableObject {
                 let audio = try Data(contentsOf: recording.url)
                 let transcript = try await transcriber.transcribe(audio: audio, filename: "push-to-talk.m4a",
                                                                   mimeType: "audio/mp4", languageHint: hint)
-                readiness.apply(.speechInputFinished(.success(transcript.text), at: Date()))
+                if generation == settingsGeneration {
+                    readiness.apply(.speechInputFinished(.success(transcript.text), at: Date()))
+                }
                 transcriptDraft = transcript.text
                 log.record(.speech, .succeeded, "Transcript ready for review", details: ["provider": transcript.provider])
-                try voice.handle(.transcriptReady(text: transcript.text, provider: transcript.provider))
+                try? voice.handle(.transcriptReady(text: transcript.text, provider: transcript.provider))
             } catch {
                 let failure = Self.asElevenLabsError(error)
-                readiness.apply(.speechInputFinished(.failure(failure), at: Date()))
-                let title = readiness.speechInput.problem?.title ?? String(describing: failure)
+                let title = SetupProblem(failure, context: .speechInput).title
+                if generation == settingsGeneration {
+                    readiness.apply(.speechInputFinished(.failure(failure), at: Date()))
+                }
                 log.record(.speech, .failed, "Transcription failed: \(title)")
                 try? voice.handle(.transcriptionFailed(title))
             }
@@ -512,6 +557,7 @@ final class AppModel: ObservableObject {
         // Only start from idle or after an error; never interrupt recording or transcript review.
         do { try voice.handle(.startSpeaking) } catch { return }
         if isTest { readiness.apply(.speechOutputStarted) }
+        let generation = settingsGeneration
         let synthesizer = ElevenLabsSynthesizer(client: client)
         let language = providerLanguage(training?.language)
         // Keep requests short; long replies are truncated for speech only (the text stays complete).
@@ -522,7 +568,11 @@ final class AppModel: ObservableObject {
         speechTask = Task {
             do {
                 let audio = try await synthesizer.synthesize(text: spoken, languageCode: language)
-                readiness.apply(.speechOutputFinished(.success(()), at: Date()))
+                if generation == settingsGeneration {
+                    readiness.apply(.speechOutputFinished(.success(()), at: Date()))
+                } else if isTest, readiness.speechOutput == .checking {
+                    readiness.apply(.speechOutputSettingsChanged)
+                }
                 guard !Task.isCancelled, voice.state == .speaking else { return }
                 try player.play(audio.data) { [weak self] in
                     guard let self else { return }
@@ -535,13 +585,21 @@ final class AppModel: ObservableObject {
                     if isTest, readiness.speechOutput == .checking { readiness.apply(.speechOutputSettingsChanged) }
                     return
                 }
+                let title: String
                 if let ell = error as? ElevenLabsError {
-                    readiness.apply(.speechOutputFinished(.failure(ell), at: Date()))
-                } else if isTest {
+                    title = SetupProblem(ell, context: .speechOutput).title
+                    if generation == settingsGeneration {
+                        readiness.apply(.speechOutputFinished(.failure(ell), at: Date()))
+                    } else if isTest, readiness.speechOutput == .checking {
+                        readiness.apply(.speechOutputSettingsChanged)
+                    }
+                } else {
                     // Audio arrived but could not be played: a local problem, not a provider failure.
-                    readiness.apply(.speechOutputFinished(.success(()), at: Date()))
+                    title = "Playback failed: \(error)"
+                    if isTest, generation == settingsGeneration {
+                        readiness.apply(.speechOutputFinished(.success(()), at: Date()))
+                    }
                 }
-                let title = readiness.speechOutput.problem?.title ?? "Playback failed: \(error)"
                 log.record(.speech, .failed, "Speech output failed: \(title)")
                 try? voice.handle(.speakingFailed(title))
             }

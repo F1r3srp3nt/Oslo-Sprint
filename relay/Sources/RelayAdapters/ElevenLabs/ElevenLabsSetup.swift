@@ -235,6 +235,8 @@ public enum SetupEvent: Sendable {
 /// - Saving a key verifies nothing: all request-based checks return to "not checked".
 /// - A passed account check never marks speech input or output as tested.
 /// - Changing a model, format or voice resets only the checks it affects.
+/// - An account-check result is ignored unless that check is still running (stale results
+///   from before a key change never mark the new key as checked).
 public struct ElevenLabsReadiness: Equatable, Sendable {
     public private(set) var keySaved: Bool
     public private(set) var voiceIDSet: Bool
@@ -265,9 +267,13 @@ public struct ElevenLabsReadiness: Equatable, Sendable {
             speechOutput = .notChecked
         case let .microphone(permission):
             microphone = permission
+            // A "microphone denied" result no longer applies once access is granted.
+            if permission == .granted, speechInput.problem == .microphoneDenied { speechInput = .notChecked }
         case .accountCheckStarted:
             account = .checking
         case let .accountCheckFinished(result, at):
+            // Ignore results from a check started before the key changed (or never started).
+            guard account == .checking else { return }
             switch result {
             case .success:
                 account = .passed(at: at, detail: "ElevenLabs accepted the key (GET /v1/user). This does not test speech.")
