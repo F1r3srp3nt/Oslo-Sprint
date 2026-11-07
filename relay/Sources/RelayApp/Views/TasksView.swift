@@ -86,7 +86,8 @@ struct TaskRow: View {
                             Button(state.displayName) { model.transition(task, to: state) }
                         }
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .buttonStyle(.borderless)
                     .fixedSize()
                 }
             }

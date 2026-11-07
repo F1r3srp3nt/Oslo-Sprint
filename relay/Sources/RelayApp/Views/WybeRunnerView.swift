@@ -66,7 +66,7 @@ struct WybeRunnerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Latest observation").font(.headline)
                 if let obs = model.wybeObservation {
-                    Text("Time \(obs.time) / \(obs.shiftEndsAt.map(String.init) ?? "?") min · robot at \(obs.robotLocation ?? "?")")
+                    Text("Time \(obs.time) / \(obs.shiftEndsAt.map { "\($0)" } ?? "?") min · robot at \(obs.robotLocation ?? "?")")
                         .font(.callout.monospaced())
                     Text("Carrying: \(obs.carrying.isEmpty ? "nothing" : obs.carrying.joined(separator: ", "))")
                         .font(.caption).foregroundStyle(Theme.textSecondary)

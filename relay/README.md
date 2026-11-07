@@ -36,10 +36,12 @@ cd relay
 ./scripts/build-app.sh
 open build/Relay.app
 
-# Option B: run straight from SwiftPM (mic permission will be asked for Terminal)
+# Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
 swift run Relay
 
-# Or open Package.swift in Xcode and run the "Relay" scheme.
+# Xcode: opening Package.swift and running the "Relay" scheme works for everything except
+# push-to-talk — a bare executable has no Info.plist/NSMicrophoneUsageDescription, and macOS
+# terminates apps that request the microphone without one. Use Option A for voice.
 ```
 
 ## Headless runner (macOS or Linux)

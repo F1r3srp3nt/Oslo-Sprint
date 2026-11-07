@@ -46,6 +46,8 @@ public struct URLSessionTransport: HTTPTransport {
             #endif
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch {
             throw TransportError.network(error.localizedDescription)
         }

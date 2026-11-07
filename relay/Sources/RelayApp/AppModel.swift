@@ -3,7 +3,6 @@ import Foundation
 import RelayAdapters
 import RelayCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Holds the current Wybe stop signal so non-isolated code (the assistant's stop tool) can trip it.
 final class StopController: @unchecked Sendable {
@@ -56,7 +55,7 @@ final class AppModel: ObservableObject {
 
     // MARK: Wybe (simulation only in this milestone)
     @Published var wybeRunning = false
-    @Published var wybeObservation: Observation?
+    @Published var wybeObservation: RelayCore.Observation?
     @Published var wybeDecision = ""
     @Published var wybeRecords: [ActionRecord] = []
     @Published var wybeReports: [RunReport] = []
@@ -243,9 +242,9 @@ final class AppModel: ObservableObject {
         guard client.hasAPIKey else { connectionStatus = .unconfigured; return }
         connectionStatus = .checking
         log.record(.speech, .attempted, "Checking ElevenLabs credentials (GET /v1/user)")
-        let client = self.client
+        let speechClient = self.client
         Task {
-            let status = await client.verify()
+            let status = await speechClient.verify()
             connectionStatus = status
             switch status {
             case .connected: log.record(.speech, .succeeded, "ElevenLabs connection verified")
@@ -367,9 +366,9 @@ final class AppModel: ObservableObject {
                 }
                 connectionStatus = .connected(verifiedAt: Date())
                 log.record(.speech, .succeeded, "Playing spoken reply")
-            } catch is CancellationError {
-                return
             } catch {
+                // Stop playback cancels the request; that is not a failure.
+                if Task.isCancelled || error is CancellationError { return }
                 noteSpeechError(error)
                 log.record(.speech, .failed, "Speech output failed: \(error)")
                 try? voice.handle(.speakingFailed(String(describing: error)))
@@ -469,7 +468,7 @@ final class AppModel: ObservableObject {
     func exportLog() {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "relay-activity.jsonl"
-        panel.allowedContentTypes = [.json, .plainText]
+        panel.allowsOtherFileTypes = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try Data(log.exportJSONLines().utf8).write(to: url)
