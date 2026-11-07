@@ -19,7 +19,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 | Warehouse training (text) | Complete and deterministic, with a **synthetic** procedure in en / nb / pl |
 | Wybe Night Shift | **Simulation only.** The live protocol hasn't been obtained, and live mode sends nothing |
 | ElevenLabs STT / TTS adapters | Implemented and tested against a fake transport, and checked against elevenlabs.io docs (2026-11-07). **Never called the real service** (no key) |
-| macOS SwiftUI app | Source complete. **Not compiled yet** because no macOS machine was available |
+| macOS SwiftUI app | An earlier version compiled on GitHub's macOS runner (Xcode 16.4). The guided-setup changes are **not yet compiled on macOS**; run `scripts/verify-macos.sh` |
 
 ## Continuous integration
 
@@ -39,6 +39,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 
 ```bash
 cd relay
+./scripts/verify-macos.sh --launch-check   # build + tests + Relay.app + launch check → build/verify-macos.log
 ./scripts/test.sh                      # swift build + swift test (also builds the app target)
 
 # Option A: build a proper .app (adds the microphone usage text; signs ad hoc)
@@ -111,6 +112,10 @@ works. The status pills read "Not configured — text only".
 
 ## Acceptance checklist (Mac)
 
+The full step-by-step sequence for the guided speech setup is in `docs/MACOS-ACCEPTANCE.md`. It covers
+key saving, account check, voice and microphone tests, cancel/restart, changes while a request is
+pending, persistence across restarts, and the minimum window width. The short list:
+
 - [ ] `./scripts/test.sh` passes: 68 tests, and the `Relay` app target compiles.
 - [ ] `./scripts/build-app.sh && open build/Relay.app` opens a dark window with six sections.
 - [ ] Assistant, typed `start`: the card shows Heard / Understood / Plan / Attempted / Result, and Step 1/7 has the SAFETY line first.
@@ -122,7 +127,7 @@ works. The status pills read "Not configured — text only".
 - [ ] Settings, no key: the readiness panel shows "Key saved: No", the speech pills say "Not configured — text only", and the mic button is disabled. Typing still works.
 - [ ] Settings › *Open API Keys*, *Open My Voices* and *Open Voice Library* open the ElevenLabs dashboard in the browser.
 - [ ] Save a wrong key: "Key saved" turns Yes but nothing reads as verified. *Check account* then shows "ElevenLabs did not accept this API key (HTTP 401)", and the key appears nowhere in Activity or an export.
-- [ ] Use a valid key without User (read): *Check account* shows "key is valid but lacks the User (read) permission" as needs-attention, not as an invalid key.
+- [ ] Use a key without User (read): *Check account* shows what ElevenLabs actually returned. An explicit `insufficient_permissions` code shows "reports insufficient permissions" as needs-attention, naming a permission only if ElevenLabs' message names it. A bare 403 shows "refused access; the cause is not stated" and claims neither that the key is valid nor which permission is missing.
 - [ ] Paste the API key into the voice-ID field: it is refused and not saved.
 - [ ] Valid key and voice: *Test voice* plays the sample and marks "Speech output tested". *Test speech input* records 3 s and marks "Speech input tested". The account check stays a separate line.
 - [ ] Changing the speech generation model resets "Speech output tested" to Not tested.

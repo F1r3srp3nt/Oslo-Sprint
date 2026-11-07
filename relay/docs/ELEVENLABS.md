@@ -48,13 +48,15 @@ Saving or replacing a key resets all request-based checks. Changing the voice re
 
 Responses are classified by documented `detail.code` (or the legacy `detail.status`), then by `detail.type`, then by HTTP status:
 
-- **Invalid credentials:** 401, `invalid_api_key`. Distinct from a **missing permission** (403 `insufficient_permissions`). On the account check, a missing `user_read` is shown as *needs attention* ("the key is valid"), not as a failure.
+- **Invalid credentials:** 401, `invalid_api_key`.
+- **Reported missing permission:** only when the response carries the explicit `insufficient_permissions` code (or the legacy `missing_permissions`). A specific permission is named only if ElevenLabs' own message names one. Otherwise Relay states which permission its request uses, as a requirement rather than a diagnosis. On the optional account check this is shown as *needs attention*.
+- **Inconclusive access errors:** a bare 403 (no code, or `forbidden` / `authorization_error`) is shown as "refused access; the cause is not stated". Relay does not claim the key is valid or that a particular permission is missing.
 - **Unavailable voice:** `voice_not_found` / `voice_access_denied`.
 - **Unavailable model:** `model_not_found` / `unsupported_model` / `model_access_denied`.
 - **Exhausted credits:** 402, `insufficient_credits`, legacy `quota_exceeded`.
 - **Rate limiting:** 429.
 - **Network failures:** shown as "could not reach", with no claim about whether the request arrived.
-- **Ambiguous responses:** a bare 403 or a 404 without a code is not given a guessed cause. ElevenLabs' message and request ID are shown, redacted.
+- **Ambiguous responses:** a 404 without a code is not given a guessed cause either. ElevenLabs' message and request ID are shown, redacted.
 
 ## What was exercised
 

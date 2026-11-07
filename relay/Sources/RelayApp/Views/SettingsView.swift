@@ -313,8 +313,8 @@ private struct APIKeyStep: View {
             }
             HelpDisclosure(title: "Troubleshooting", symbol: "wrench.and.screwdriver") {
                 Text("“Did not accept this API key” (HTTP 401): the key is wrong, incomplete, deleted, disabled or expired. Create a new key and use Replace.")
-                Text("“Key is valid but lacks User (read)” (HTTP 403, insufficient_permissions): the key works, but this one check isn't allowed. Either enable User (read) or skip the check and use Test voice / Test speech input.")
-                Text("“Refused access” (HTTP 403 without a specific code): could be key restrictions such as an IP allowlist, or workspace access. Relay shows ElevenLabs' message instead of guessing.")
+                Text("“Reports insufficient permissions” (HTTP 403 with code insufficient_permissions): ElevenLabs says this request isn't allowed for the key. Relay names a permission only if ElevenLabs' message names it. The account check uses User (read); you can enable it or skip the check and use Test voice / Test speech input.")
+                Text("“Refused access; the cause is not stated” (HTTP 403 without a specific code): this does not show whether the key is valid or which permission is missing. Possible causes include key permissions, an IP allowlist or workspace access. Relay shows ElevenLabs' message instead of guessing.")
                 Text("“Could not reach ElevenLabs”: network problem. Check the connection and try again.")
             }
         }
@@ -566,8 +566,9 @@ private struct ModelsStep: View {
     @State private var advanced = false
 
     var body: some View {
-        SetupStep(number: 4, title: "Models", enables: "Which ElevenLabs models Relay uses. The recommended choices work for English, Norwegian and Polish; most people never change them.",
-                  status: isRecommended ? "Recommended defaults" : "Custom", statusColor: isRecommended ? Theme.success : Theme.warning) {
+        SetupStep(number: 4, title: "Models", enables: "Which ElevenLabs models Relay uses. Most people never change them.",
+                  status: isRecommended ? "Recommended defaults" : "Your saved choice", statusColor: isRecommended ? Theme.success : Theme.accent) {
+            DefaultModelNote(savedGenerationModel: model.elevenLabs.textToSpeechModel)
             ModelPicker(title: "Speech recognition model", explanation: "Turns your recorded voice into text.",
                         choices: ModelChoice.speechRecognition, selection: $model.elevenLabs.speechToTextModel)
             ModelPicker(title: "Speech generation model", explanation: "Turns Relay's replies into spoken audio.",
@@ -587,6 +588,11 @@ private struct ModelsStep: View {
                         Button("Reset to recommended") { model.resetModelsToRecommended() }.disabled(isRecommended)
                         LinkButton(title: "ElevenLabs model list", url: ProviderLinks.elevenLabsModelDocs)
                     }
+                    Divider()
+                    Toggle("Testing aid: wait 5 seconds before each ElevenLabs request", isOn: $model.delayRequestsForTesting)
+                        .font(.callout)
+                    Text("For checking that results which arrive after you replace the key or change the voice or model are discarded. Real requests are still sent after the wait; nothing is simulated. Turns off when Relay restarts.")
+                        .font(.caption).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 6)
             } label: {
@@ -602,6 +608,29 @@ private struct ModelsStep: View {
         model.elevenLabs.speechToTextModel == ElevenLabsConfiguration.recommendedSpeechToTextModel
             && model.elevenLabs.textToSpeechModel == ElevenLabsConfiguration.recommendedTextToSpeechModel
             && model.elevenLabs.outputFormat == ElevenLabsConfiguration.recommendedOutputFormat
+    }
+}
+
+/// Explains the speech-generation default and that Relay never changes a saved choice by itself.
+private struct DefaultModelNote: View {
+    let savedGenerationModel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("About the default", systemImage: "info.circle").font(.callout.weight(.semibold))
+            Text("New setups use Flash v2.5 (\(ElevenLabsConfiguration.recommendedTextToSpeechModel)) for speech generation. Earlier Relay builds defaulted to Multilingual v2. The default changed because ElevenLabs' model list includes Norwegian for Flash v2.5 but not for Multilingual v2, and Relay's training includes Norwegian.")
+            if savedGenerationModel == "eleven_multilingual_v2" {
+                Text("You are using Multilingual v2 from an earlier setup. It is kept as saved; choose Flash v2.5 below if you want Norwegian speech.")
+                    .foregroundStyle(Theme.accent)
+            }
+            Text("Relay never changes a saved model on its own, not even after a failed request. It shows the error and you decide. Whether a model is available, which languages it speaks and how many credits it uses depend on ElevenLabs and your account or plan (checked against ElevenLabs' model list on 7 November 2026).")
+        }
+        .font(.caption)
+        .foregroundStyle(Theme.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

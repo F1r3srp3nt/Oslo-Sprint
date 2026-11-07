@@ -17,9 +17,10 @@ public struct ElevenLabsRejection: Equatable, Sendable {
     public enum Kind: String, Sendable, Equatable {
         /// 401 / `authentication_error`: the key is invalid, missing, expired, deleted or disabled.
         case invalidCredentials
-        /// `insufficient_permissions`: the key is valid but not allowed to call this endpoint.
+        /// Explicit `insufficient_permissions` (or legacy `missing_permissions`) code. Says nothing
+        /// about which permission unless the message names one.
         case missingPermission
-        /// 403 without a more specific code (key restrictions, IP allowlist, workspace access…).
+        /// 403 without a more specific code. Inconclusive: does not show whether the key is valid.
         case accessDenied
         /// `feature_not_available` / `subscription_required`.
         case planRestriction

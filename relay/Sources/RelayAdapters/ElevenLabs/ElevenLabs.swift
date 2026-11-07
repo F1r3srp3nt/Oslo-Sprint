@@ -99,8 +99,7 @@ public struct ElevenLabsClient: Sendable {
     ///
     /// Success proves only that ElevenLabs accepted the key for this endpoint. It does not prove
     /// that speech-to-text or text-to-speech will work (those need their own permissions,
-    /// models, voice and credits). A restricted key without `user_read` fails this check with
-    /// `.missingPermission` while speech may still work.
+    /// models, voice and credits). A failure here does not prove speech will fail either.
     public func checkAccount() async -> Result<Void, ElevenLabsError> {
         do {
             _ = try await send(try request(path: "v1/user", method: "GET"))

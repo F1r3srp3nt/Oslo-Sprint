@@ -205,9 +205,23 @@ final class AppModel: ObservableObject {
     /// an older generation are discarded, so they can't mark the new settings as tested.
     private var settingsGeneration = 0
 
+    /// Testing aid (Settings › Models › Advanced): wait 5 s before each ElevenLabs request so a
+    /// setting can be changed while a request is pending. Session only; never saved.
+    @Published var delayRequestsForTesting = false {
+        didSet {
+            if oldValue != delayRequestsForTesting {
+                log.record(.settings, .info, delayRequestsForTesting
+                           ? "Testing aid ON: ElevenLabs requests wait 5 seconds before being sent"
+                           : "Testing aid OFF: ElevenLabs requests are sent immediately")
+            }
+        }
+    }
+
     private var client: ElevenLabsClient {
         let store = credentials
-        return ElevenLabsClient(configuration: elevenLabs, apiKey: {
+        let transport: HTTPTransport = delayRequestsForTesting
+            ? DelayedTransport(base: URLSessionTransport(), seconds: 5) : URLSessionTransport()
+        return ElevenLabsClient(configuration: elevenLabs, transport: transport, apiKey: {
             CredentialAccess.load(CredentialAccount.elevenLabsAPIKey, from: store)
         })
     }
@@ -270,7 +284,11 @@ final class AppModel: ObservableObject {
         let generation = settingsGeneration
         Task {
             let result = await speechClient.checkAccount()
-            guard generation == settingsGeneration else { return } // key changed meanwhile; core also ignores it
+            guard generation == settingsGeneration else {
+                // The key changed meanwhile; the core also ignores results for checks no longer running.
+                log.record(.speech, .info, "Discarded an account-check result: the key changed while the request was pending")
+                return
+            }
             readiness.apply(.accountCheckFinished(result, at: Date()))
             switch readiness.account {
             case .passed: log.record(.speech, .succeeded, "Account check passed (this does not test speech)")
@@ -409,6 +427,9 @@ final class AppModel: ObservableObject {
             guard isCurrentInputTest(token), generation == settingsGeneration else {
                 // Cancelled, superseded, or the settings changed meanwhile: the result no longer applies.
                 if readiness.speechInput == .checking, inputTestToken == token { readiness.apply(.speechInputSettingsChanged) }
+                log.record(.speech, .info, generation != settingsGeneration
+                           ? "Discarded a speech-input test result: settings changed while the request was pending"
+                           : "Discarded a speech-input test result: the test was cancelled or replaced")
                 finishInputTest(token)
                 return
             }
@@ -517,6 +538,8 @@ final class AppModel: ObservableObject {
                                                                   mimeType: "audio/mp4", languageHint: hint)
                 if generation == settingsGeneration {
                     readiness.apply(.speechInputFinished(.success(transcript.text), at: Date()))
+                } else {
+                    log.record(.speech, .info, "Transcript kept, but not counted as a test: settings changed while the request was pending")
                 }
                 transcriptDraft = transcript.text
                 log.record(.speech, .succeeded, "Transcript ready for review", details: ["provider": transcript.provider])
@@ -570,8 +593,9 @@ final class AppModel: ObservableObject {
                 let audio = try await synthesizer.synthesize(text: spoken, languageCode: language)
                 if generation == settingsGeneration {
                     readiness.apply(.speechOutputFinished(.success(()), at: Date()))
-                } else if isTest, readiness.speechOutput == .checking {
-                    readiness.apply(.speechOutputSettingsChanged)
+                } else {
+                    if isTest, readiness.speechOutput == .checking { readiness.apply(.speechOutputSettingsChanged) }
+                    log.record(.speech, .info, "Discarded a speech-output result: settings changed while the request was pending")
                 }
                 guard !Task.isCancelled, voice.state == .speaking else { return }
                 try player.play(audio.data) { [weak self] in

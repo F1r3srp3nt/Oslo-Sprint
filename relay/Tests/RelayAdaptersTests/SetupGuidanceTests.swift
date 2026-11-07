@@ -38,7 +38,7 @@ final class ErrorClassificationTests: XCTestCase {
         // A 404 without a code could be the voice or the model: unrecognised, message shown.
         XCTAssertEqual(classify(404, #"{"detail":"Not Found"}"#).kind, .unrecognised)
         let problem = SetupProblem(.rejected(classify(403, #"{"detail":{"message":"Request blocked"}}"#)), context: .speechOutput)
-        XCTAssertTrue(problem.nextStep.contains("does not say exactly why"))
+        XCTAssertTrue(problem.nextStep.contains("does not show whether the key is valid"))
         XCTAssertTrue(problem.providerDetail?.contains("Request blocked") == true)
     }
 
@@ -55,12 +55,45 @@ final class ErrorClassificationTests: XCTestCase {
         XCTAssertTrue(problem.providerDetail!.contains("req123"))
     }
 
-    func testMissingPermissionNamesThePermissionForTheRequestMade() {
-        let r = classify(403, #"{"detail":{"code":"insufficient_permissions"}}"#)
-        XCTAssertTrue(SetupProblem(.rejected(r), context: .accountCheck).title.contains("User (read)"))
-        XCTAssertTrue(SetupProblem(.rejected(r), context: .accountCheck).nextStep.contains("user_read"))
-        XCTAssertTrue(SetupProblem(.rejected(r), context: .speechInput).nextStep.contains("speech_to_text"))
-        XCTAssertTrue(SetupProblem(.rejected(r), context: .speechOutput).nextStep.contains("text_to_speech"))
+    func testPermissionIsNamedOnlyWhenTheProviderNamesIt() {
+        // Code present, no permission in the message: no specific permission is claimed as missing.
+        let unnamed = classify(403, #"{"detail":{"type":"authorization_error","code":"insufficient_permissions","message":"You do not have the required permissions"}}"#)
+        let p1 = SetupProblem(.rejected(unnamed), context: .accountCheck)
+        XCTAssertEqual(p1.title, "ElevenLabs reports insufficient permissions for this request")
+        XCTAssertFalse(p1.title.contains("user_read"))
+        XCTAssertFalse(p1.title.lowercased().contains("valid"), "never claims the key is valid")
+        // The next step states what Relay's request uses (a requirement, not a diagnosis).
+        XCTAssertTrue(p1.nextStep.contains("This request needs User (read) (user_read)"))
+        XCTAssertTrue(SetupProblem(.rejected(unnamed), context: .speechInput).nextStep.contains("speech_to_text"))
+        XCTAssertTrue(SetupProblem(.rejected(unnamed), context: .speechOutput).nextStep.contains("text_to_speech"))
+
+        // The provider names the permission: it may be repeated.
+        let named = classify(403, #"{"detail":{"code":"insufficient_permissions","message":"The API key is missing the permission user_read"}}"#)
+        XCTAssertEqual(SetupProblem(.rejected(named), context: .accountCheck).title,
+                       "ElevenLabs reports a missing permission: user_read")
+        XCTAssertNil(ElevenLabsPermissionNames.mentioned(in: "user reading is fun"), "whole identifiers only")
+
+        // A permission code wins over the HTTP status: a 401 carrying it is not "invalid key".
+        let legacy = classify(401, #"{"detail":{"status":"missing_permissions","message":"The API key you used is missing the permission user_read to execute this operation."}}"#)
+        XCTAssertEqual(legacy.kind, .missingPermission)
+        XCTAssertEqual(SetupProblem(.rejected(legacy), context: .accountCheck).title,
+                       "ElevenLabs reports a missing permission: user_read")
+    }
+
+    func testBare403IsInconclusive() {
+        for body in ["", #"{"detail":{"message":"Forbidden"}}"#, #"{"detail":{"type":"authorization_error","code":"forbidden"}}"#] {
+            let r = classify(403, body)
+            XCTAssertEqual(r.kind, .accessDenied, body)
+            let p = SetupProblem(.rejected(r), context: .accountCheck)
+            XCTAssertTrue(p.title.contains("cause is not stated"))
+            XCTAssertTrue(p.nextStep.contains("does not show whether the key is valid"))
+            XCTAssertFalse(p.title.contains("user_read"))
+            XCTAssertFalse(p.title.lowercased().contains("permission"), "no specific permission diagnosis in the title")
+            var readiness = ElevenLabsReadiness(keySaved: true, voiceIDSet: false)
+            readiness.apply(.accountCheckStarted)
+            readiness.apply(.accountCheckFinished(.failure(.rejected(r)), at: Date()))
+            guard case .failed = readiness.account else { return XCTFail("a bare 403 is a failure, not 'needs attention'") }
+        }
     }
 
     func testInvalidKeyAndMissingPermissionAreDistinguishedOnAccountCheck() {
@@ -72,9 +105,11 @@ final class ErrorClassificationTests: XCTestCase {
 
         readiness.apply(.accountCheckStarted)
         readiness.apply(.accountCheckFinished(.failure(.rejected(classify(403, #"{"detail":{"code":"insufficient_permissions"}}"#))), at: Date()))
-        guard case let .attention(limited) = readiness.account else { return XCTFail("missing user_read is attention, not failure") }
-        XCTAssertTrue(limited.title.contains("key is valid"))
-        XCTAssertTrue(limited.nextStep.contains("speech can work without it"))
+        guard case let .attention(limited) = readiness.account else {
+            return XCTFail("an explicit insufficient_permissions code is attention, not failure")
+        }
+        XCTAssertTrue(limited.title.contains("insufficient permissions"))
+        XCTAssertTrue(limited.nextStep.contains("account check is optional"))
     }
 
     func testEveryKindHasActionableGuidanceAndNoEmptyText() {
@@ -236,6 +271,16 @@ final class LinksAndInputSafetyTests: XCTestCase {
         XCTAssertTrue(transport.sent.isEmpty)
     }
 
+    func testSavedModelChoicesSurviveTheNewDefault() throws {
+        // Exactly the JSON an earlier build stored in UserDefaults (default model at the time).
+        let saved = Data(#"{"baseURL":"https:\/\/api.elevenlabs.io","speechToTextModel":"scribe_v2","textToSpeechModel":"eleven_multilingual_v2","voiceID":"VoiceABC123","outputFormat":"mp3_44100_128"}"#.utf8)
+        let restored = try JSONDecoder().decode(ElevenLabsConfiguration.self, from: saved)
+        XCTAssertEqual(restored.textToSpeechModel, "eleven_multilingual_v2", "a saved choice is never replaced by the new default")
+        XCTAssertEqual(restored.voiceID, "VoiceABC123")
+        let roundTrip = try JSONDecoder().decode(ElevenLabsConfiguration.self, from: JSONEncoder().encode(restored))
+        XCTAssertEqual(roundTrip, restored)
+    }
+
     func testDefaultsAreTheDocumentedRecommendations() {
         let config = ElevenLabsConfiguration()
         XCTAssertEqual(config.speechToTextModel, "scribe_v2")
@@ -266,5 +311,27 @@ final class CapabilityTextTests: XCTestCase {
         // The live adapter still sends nothing.
         do { _ = try await LiveNightShiftAdapter().observe(); XCTFail() }
         catch { guard case ChallengeError.contractUnavailable = error else { return XCTFail("\(error)") } }
+    }
+}
+
+final class DelayedTransportTests: XCTestCase {
+    func testDelaysThenForwardsTheRealRequest() async throws {
+        let base = FakeTransport()
+        let delayed = DelayedTransport(base: base, seconds: 0.05)
+        let start = Date()
+        _ = try await delayed.send(URLRequest(url: URL(string: "https://api.elevenlabs.io/v1/user")!))
+        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.04)
+        XCTAssertEqual(base.sent.count, 1)
+    }
+
+    func testCancellingDuringTheDelaySendsNothing() async {
+        let base = FakeTransport()
+        let delayed = DelayedTransport(base: base, seconds: 5)
+        let task = Task { try await delayed.send(URLRequest(url: URL(string: "https://api.elevenlabs.io/v1/user")!)) }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        task.cancel()
+        let result = await task.result
+        if case .success = result { XCTFail("expected cancellation") }
+        XCTAssertTrue(base.sent.isEmpty)
     }
 }

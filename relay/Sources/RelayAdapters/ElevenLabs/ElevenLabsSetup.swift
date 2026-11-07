@@ -58,6 +58,32 @@ public enum ElevenLabsPermission: String, CaseIterable, Sendable {
     public var required: Bool { self != .userRead }
 }
 
+/// Permission identifiers documented for ElevenLabs API keys
+/// (https://elevenlabs.io/docs/api-reference/service-accounts/api-keys/create, 2026-11-07).
+/// Used only to recognise a permission that the provider's own error message names.
+public enum ElevenLabsPermissionNames {
+    public static let documented: Set<String> = [
+        "text_to_speech", "speech_to_speech", "speech_to_text", "models_read", "models_write", "voices_read",
+        "voices_write", "voice_collections_read", "voice_collections_write", "speech_history_read",
+        "speech_history_write", "sound_generation", "audio_isolation", "voice_generation", "dubbing_read",
+        "dubbing_write", "pronunciation_dictionaries_read", "pronunciation_dictionaries_write", "user_read",
+        "user_write", "projects_read", "projects_write", "audio_native_read", "audio_native_write", "workspace_read",
+        "workspace_write", "forced_alignment", "convai_read", "convai_write", "agents_architect", "music_generation",
+        "image_video_generation", "flows", "templates", "add_voice_from_voice_library", "create_instant_voice_clone",
+        "create_professional_voice_clone", "publish_voice_to_voice_library", "share_voice_externally",
+        "create_user_api_key", "workspace_analytics_full_read", "webhooks_write", "service_account_write",
+        "group_members_manage", "workspace_members_read", "workspace_members_invite", "workspace_members_remove",
+        "terms_of_service_accept", "audit_log_read", "conversation_privacy_manage", "copy_resources_cross_workspace",
+        "synthid_detector",
+    ]
+
+    /// The first documented permission identifier that appears as a whole word in `message`.
+    public static func mentioned(in message: String) -> String? {
+        let words = message.lowercased().split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).map(String.init)
+        return words.first { documented.contains($0) }
+    }
+}
+
 /// What Relay was doing when a problem happened; used to give the right next step.
 public enum SetupContext: Sendable, Equatable {
     case accountCheck, speechInput, speechOutput
@@ -123,15 +149,19 @@ public struct SetupProblem: Equatable, Sendable {
                           nextStep: "Check that the whole key was pasted. ElevenLabs shows a key in full only once, so if in doubt create a new key, then use Replace. Deleted, disabled or expired keys are also refused.",
                           providerDetail: detail, link: ProviderLinks.elevenLabsAPIKeys)
             case .missingPermission:
+                // Only name a permission when ElevenLabs' own message names one.
+                let named = ElevenLabsPermissionNames.mentioned(in: r.message)
+                let title = named.map { "ElevenLabs reports a missing permission: \($0)" }
+                    ?? "ElevenLabs reports insufficient permissions for this request"
                 let extra = context == .accountCheck
-                    ? " This permission is only needed for the account check; speech can work without it, so you can skip this check and use Test voice / Test speech input instead."
+                    ? " The account check is optional: speech requests use other permissions, so Test voice and Test speech input can still be tried."
                     : ""
-                self.init(title: "The key is valid but lacks the \(permission.label) permission",
-                          nextStep: "In ElevenLabs › Developers › API Keys, open the key's More actions (…) › Edit and enable \(permission.label) (\(permission.rawValue)), or create a new key with it.\(extra)",
+                self.init(title: title,
+                          nextStep: "This request needs \(permission.label) (\(permission.rawValue)). In ElevenLabs › Developers › API Keys, open the key's More actions (…) › Edit and check that it is enabled, or create a new key with it.\(extra)",
                           providerDetail: detail, link: ProviderLinks.elevenLabsAPIKeys)
             case .accessDenied:
-                self.init(title: "ElevenLabs refused access (HTTP \(r.httpStatus))",
-                          nextStep: "The response does not say exactly why. Check the key's restrictions (permissions, IP allowlist) and your workspace access, using the message below.",
+                self.init(title: "ElevenLabs refused access (HTTP \(r.httpStatus)); the cause is not stated",
+                          nextStep: "This response does not show whether the key is valid or which permission, if any, is missing. Possible causes include the key's permissions, an IP allowlist or workspace access. Check the key in Developers › API Keys, using the provider message below.",
                           providerDetail: detail, link: ProviderLinks.elevenLabsAPIKeys)
             case .planRestriction:
                 self.init(title: "Not available on the current ElevenLabs plan",
@@ -182,7 +212,8 @@ public enum CheckState: Equatable, Sendable {
     case notChecked
     case checking
     case passed(at: Date, detail: String)
-    /// Partly OK, needs a decision or action (e.g. key recognised but missing an optional permission).
+    /// Needs a decision or action, but is not necessarily blocking (e.g. the provider reported an
+    /// insufficient permission for the optional account check).
     case attention(SetupProblem)
     case failed(SetupProblem)
 
@@ -279,7 +310,8 @@ public struct ElevenLabsReadiness: Equatable, Sendable {
                 account = .passed(at: at, detail: "ElevenLabs accepted the key (GET /v1/user). This does not test speech.")
             case let .failure(error):
                 let problem = SetupProblem(error, context: .accountCheck)
-                // Authenticated but missing user_read: the key itself is recognised.
+                // An explicit insufficient_permissions code is "needs attention" (speech may still work).
+                // Anything else, including a bare 403, is a failure with an inconclusive explanation.
                 account = error.rejection?.kind == .missingPermission ? .attention(problem) : .failed(problem)
             }
         case .speechInputStarted:
