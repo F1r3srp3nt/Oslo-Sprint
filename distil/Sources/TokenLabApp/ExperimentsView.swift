@@ -67,7 +67,7 @@ struct ExperimentRow: View {
             HStack(spacing: 6) {
                 if experiment.comparison != nil { Image(systemName: "rectangle.split.3x1").font(.caption2).foregroundStyle(.secondary).help("Part of a saved comparison") }
                 VerdictBadge(evaluation: experiment.evaluation)
-                Text(experiment.createdAt, style: .date).font(.caption2).foregroundStyle(.tertiary)
+                Text(experiment.createdAt, style: .date).font(.caption2).foregroundStyle(DS.textTertiary)
             }
         }
         .padding(.vertical, 3)
@@ -86,6 +86,18 @@ struct ExperimentDetail: View {
     let onDelete: () -> Void
     @State private var tab: Tab = .snapshot
 
+    private var createdLabel: some View {
+        Text("Created \(experiment.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            .font(.caption).foregroundStyle(DS.textSecondary).fixedSize()
+    }
+
+    private var tabPicker: some View {
+        Picker("View", selection: $tab) {
+            ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented).labelsHidden().fixedSize()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
@@ -103,14 +115,10 @@ struct ExperimentDetail: View {
                     }
                     .fixedSize()
                 }
-                HStack {
-                    Text("Created \(experiment.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("View", selection: $tab) {
-                        ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                // The date moves above the tabs when the detail pane is narrow.
+                ViewThatFits(in: .horizontal) {
+                    HStack { createdLabel; Spacer(); tabPicker }
+                    VStack(alignment: .leading, spacing: 6) { createdLabel; tabPicker }
                 }
             }
             .padding(16)
@@ -366,7 +374,7 @@ struct ChecksEditor: View {
                 }
                 Text(help).font(.caption).foregroundStyle(.secondary)
                 if checks.isEmpty {
-                    Text("None yet.").font(.callout).foregroundStyle(.tertiary)
+                    Text("None yet.").font(.callout).foregroundStyle(DS.textTertiary)
                 }
                 ForEach($checks) { $check in
                     HStack(spacing: 8) {

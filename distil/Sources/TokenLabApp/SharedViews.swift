@@ -141,7 +141,7 @@ struct RelevanceTermsView: View {
             if relevance.matchedTerms.isEmpty {
                 Text("· no task terms found").font(.caption).foregroundStyle(.secondary)
             } else {
-                Text("·").font(.caption).foregroundStyle(.tertiary)
+                Text("·").font(.caption).foregroundStyle(DS.textTertiary)
                 Text(Self.termsText(relevance.matchedTerms))
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

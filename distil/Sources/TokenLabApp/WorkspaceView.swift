@@ -245,16 +245,10 @@ struct SelectionSettingsPanel: View {
                     }
                     .font(.caption)
                 }
-                HStack(spacing: 8) {
-                    Text("Token budget")
-                    TextField("Budget", value: budget, format: .number.grouping(.never))
-                        .textFieldStyle(.roundedBorder).frame(width: 90)
-                        .multilineTextAlignment(.trailing)
-                        .accessibilityLabel("Token budget")
-                    Stepper("Token budget", value: budget, in: SelectionSettings.budgetRange, step: 50).labelsHidden()
-                    Pill(text: settings.enforcesBudget ? "Enforced" : "Reported only",
-                         color: settings.enforcesBudget ? DS.accent : DS.textSecondary)
-                    Spacer()
+                // Wraps the status pill onto its own line when the editor column is narrow.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { budgetControls; budgetPill(settings); Spacer(minLength: 0) }
+                    VStack(alignment: .leading, spacing: 6) { HStack(spacing: 8) { budgetControls }; budgetPill(settings) }
                 }
                 if settings.enforcesBudget {
                     Toggle("Remove exact duplicates before applying the budget", isOn: $store.document.settings.deduplicateBeforeBudget)
@@ -271,6 +265,24 @@ struct SelectionSettingsPanel: View {
         } label: {
             Label("Selection settings", systemImage: "slider.horizontal.3")
         }
+    }
+}
+
+extension SelectionSettingsPanel {
+    @ViewBuilder var budgetControls: some View {
+        Text("Token budget").fixedSize()
+        TextField("Budget", value: budget, format: .number.grouping(.never))
+            .textFieldStyle(.roundedBorder).frame(width: 90)
+            .multilineTextAlignment(.trailing)
+            .accessibilityLabel("Token budget")
+        Stepper("Token budget", value: budget, in: SelectionSettings.budgetRange, step: 50).labelsHidden()
+    }
+
+    func budgetPill(_ settings: SelectionSettings) -> some View {
+        Pill(text: settings.enforcesBudget ? "Enforced" : "Reported only",
+             color: settings.enforcesBudget ? DS.accent : DS.textSecondary,
+             systemImage: settings.enforcesBudget ? "gauge.with.dots.needle.33percent" : "info.circle")
+            .fixedSize()
     }
 }
 

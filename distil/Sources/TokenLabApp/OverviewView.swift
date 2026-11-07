@@ -65,7 +65,7 @@ struct OverviewView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(store.session.displayName).font(.largeTitle.bold()).lineLimit(1)
+            Text(store.session.displayName).font(.title2.weight(.semibold)).foregroundStyle(DS.textPrimary).lineLimit(1)
             HStack(spacing: 8) {
                 if let url = store.session.fileURL {
                     Label(url.path, systemImage: "doc").lineLimit(1).truncationMode(.middle)

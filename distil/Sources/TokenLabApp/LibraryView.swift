@@ -110,7 +110,7 @@ struct LibraryRow: View {
                 Text(ContextPriority.label(item.priority))
                 if uses > 0 { Text("·"); Text("In workspace ×\(uses)") }
             }
-            .font(.caption2).foregroundStyle(.tertiary)
+            .font(.caption2).foregroundStyle(DS.textTertiary)
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)

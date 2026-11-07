@@ -119,7 +119,7 @@ struct StatusBar: View {
             Text(store.hasUnsavedChanges ? "Unsaved changes" : "Saved")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(store.hasUnsavedChanges ? DS.warning : DS.textSecondary)
-            Text("·").foregroundStyle(.tertiary)
+            Text("·").foregroundStyle(DS.textTertiary)
             Text(store.status)
                 .font(.caption)
                 .foregroundStyle(.secondary)
