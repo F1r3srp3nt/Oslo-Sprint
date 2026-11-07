@@ -50,10 +50,8 @@ struct ContentView: View {
     static let detailMinWidth: CGFloat = 560
 
     private var sidebar: some View {
-        DSSidebar(groups: [
-            DSSidebarGroup(title: "Project", items: [AppSection.overview, .workspace, .comparison, .library, .experiments].map(item)),
-            DSSidebarGroup(title: "App", items: [item(.settings)])
-        ], selection: sectionSelection, topInset: DS.Space.s, brandName: "DISTIL", brandTagline: "Context selection lab") {
+        DSSidebar(groups: sidebarGroups, selection: sectionSelection, topInset: DS.Space.s,
+                  brandName: "DISTIL", brandTagline: "Context selection lab") {
             DSStatusCard(rows: [
                 DSStatusRow(label: "Project", value: store.hasUnsavedChanges ? "Unsaved changes" : "Saved",
                             systemImage: store.hasUnsavedChanges ? "pencil.circle" : "checkmark.circle",
@@ -63,6 +61,12 @@ struct ContentView: View {
             ])
             .padding(DS.Space.s)
         }
+    }
+
+    private var sidebarGroups: [DSSidebarGroup<AppSection>] {
+        let project: [AppSection] = [.overview, .workspace, .comparison, .library, .experiments]
+        return [DSSidebarGroup(title: "Project", items: project.map { item($0) }),
+                DSSidebarGroup(title: "App", items: [item(.settings)])]
     }
 
     private func item(_ section: AppSection) -> DSSidebarItem<AppSection> {

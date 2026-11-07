@@ -302,7 +302,7 @@ struct DSSidebar<ID: Hashable, Footer: View>: View {
         .focusable()
         .focused($focused)
         .focusEffectDisabled()
-        .onMoveCommand(perform: move)
+        .onMoveCommand { move($0) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sections")
     }
