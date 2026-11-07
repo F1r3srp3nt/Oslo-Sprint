@@ -5,7 +5,7 @@ Relay is a technical assistant for three Oslo Sprint side challenges: **Wybe Nig
 what it plans to do, what it attempted, and what succeeded, failed or needs attention.
 
 *Relay* is a working name. The project is self-contained in `relay/`, has no third-party
-dependencies, and does not use or touch `token-lab-macos/` (Distil).
+dependencies, and does not use or touch `distil/` (Distil).
 
 > Eligibility for more than one challenge prize has **not** been confirmed. That is a
 > question for the organisers.
