@@ -1,90 +1,177 @@
 import Foundation
 
-public enum ContextCategory: String, Codable, CaseIterable, Identifiable {
-    case reference = "Reference", conversation = "Conversation", code = "Code", toolOutput = "Tool output"
+// MARK: - Context
+
+public enum ContextCategory: String, Codable, CaseIterable, Identifiable, Sendable {
+    case reference = "Reference"
+    case conversation = "Conversation"
+    case code = "Code"
+    case toolOutput = "Tool output"
     public var id: String { rawValue }
 }
 
-public struct ContextBlock: Identifiable, Codable, Equatable {
+/// Priority of optional context. Higher numbers are considered first by budget selection.
+public enum ContextPriority {
+    public static let low = 1
+    public static let medium = 2
+    public static let high = 3
+    public static let range = 1...3
+    public static func label(_ value: Int) -> String {
+        switch value {
+        case low: return "Low"
+        case medium: return "Medium"
+        case high: return "High"
+        default: return "Invalid (\(value))"
+        }
+    }
+}
+
+public struct ContextBlock: Identifiable, Codable, Equatable, Hashable, Sendable {
     public var id: UUID
     public var title: String
     public var text: String
     public var category: ContextCategory
     public var priority: Int
+    /// Required blocks are always kept verbatim, regardless of strategy or budget.
     public var required: Bool
-    public init(id: UUID = UUID(), title: String = "Untitled context", text: String = "", category: ContextCategory = .reference, priority: Int = 2, required: Bool = false) {
+    /// When the block was inserted from the Context Library, the library item it was copied from.
+    /// The copy is independent: later edits to either side do not propagate.
+    public var libraryOrigin: UUID?
+
+    public init(id: UUID = UUID(), title: String = "Untitled context", text: String = "",
+                category: ContextCategory = .reference, priority: Int = ContextPriority.medium,
+                required: Bool = false, libraryOrigin: UUID? = nil) {
         self.id = id; self.title = title; self.text = text; self.category = category
-        self.priority = priority; self.required = required
+        self.priority = priority; self.required = required; self.libraryOrigin = libraryOrigin
+    }
+
+    /// A copy with a fresh identifier, suitable for inserting elsewhere.
+    public func independentCopy(origin: UUID? = nil) -> ContextBlock {
+        var copy = self
+        copy.id = UUID()
+        copy.libraryOrigin = origin
+        return copy
     }
 }
 
-public struct Draft: Codable, Equatable {
-    public var instructions: String = ""
-    public var blocks: [ContextBlock] = []
-    public var budget: Int = 1000
-    public init() {}
+/// The task being prepared: protected instructions / current request plus candidate context.
+public struct Draft: Codable, Equatable, Hashable, Sendable {
+    /// Protected instructions and the current request. Always kept verbatim, first in the prompt.
+    public var instructions: String
+    /// Context in prompt order. Retained blocks keep this order in the selected prompt.
+    public var blocks: [ContextBlock]
+
+    public init(instructions: String = "", blocks: [ContextBlock] = []) {
+        self.instructions = instructions; self.blocks = blocks
+    }
 }
 
-public struct BlockDecision: Codable, Identifiable, Equatable {
-    public var id: UUID
-    public var title: String
-    public var kept: Bool
-    public var reason: String
-}
+// MARK: - Selection settings
 
-public struct OptimizationReport: Codable, Equatable {
-    public var input: Draft
-    public var original: String
-    public var optimized: String
-    public var before: Int
-    public var after: Int
-    public var overBudget: Bool
-    public var decisions: [BlockDecision]
-    public var counter: String = "UTF-8 bytes / 4 estimate; excludes message overhead"
-    public var saved: Int { before - after }
-    public var savingsPercent: Int { before == 0 ? 0 : Int((Double(saved) / Double(before) * 100).rounded()) }
-}
+public enum SelectionStrategy: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// A. Keep every non-empty block.
+    case baseline
+    /// B. Remove only optional blocks whose text is byte-identical to retained text.
+    case exactDeduplication
+    /// C. Choose optional blocks by priority until the token budget is reached.
+    case budgetSelection
 
-public enum QualityReview: String, Codable, CaseIterable, Identifiable {
-    case notRun = "Not evaluated", passed = "Manually reviewed: pass", failed = "Manually reviewed: fail"
     public var id: String { rawValue }
-}
 
-public struct Experiment: Identifiable, Codable, Equatable {
-    public var id = UUID()
-    public var name: String
-    public var createdAt = Date()
-    public var report: OptimizationReport
-    public var review: QualityReview = .notRun
-    public var notes = ""
-    public init(name: String, report: OptimizationReport) { self.name = name; self.report = report }
-}
-
-public struct ProjectDocument: Codable, Equatable {
-    public var schemaVersion = 1
-    public var draft = Draft()
-    public var library: [ContextBlock] = []
-    public var experiments: [Experiment] = []
-    public init() {}
-    public func validate() throws {
-        guard schemaVersion == 1 else { throw LabError.invalid("Unsupported project version.") }
-        try Optimizer.validate(draft)
-        guard library.count <= 500, experiments.count <= 500 else { throw LabError.invalid("Project exceeds the 500-item library or experiment limit.") }
-        guard Set(library.map(\.id)).count == library.count,
-              Set(experiments.map(\.id)).count == experiments.count else { throw LabError.invalid("Project contains duplicate identifiers.") }
-        for block in library {
-            guard (1...3).contains(block.priority) else { throw LabError.invalid("Context priorities must be between 1 and 3.") }
+    public var displayName: String {
+        switch self {
+        case .baseline: return "Baseline"
+        case .exactDeduplication: return "Exact deduplication"
+        case .budgetSelection: return "Budget selection"
         }
-        for experiment in experiments {
-            // Persisted reports must agree with their source inputs, not supplied metrics.
-            guard try Optimizer.run(experiment.report.input) == experiment.report else {
-                throw LabError.invalid("An experiment report does not match its inputs.")
-            }
+    }
+
+    public var summary: String {
+        switch self {
+        case .baseline:
+            return "Retains all context. Use it as the full-context reference for comparisons."
+        case .exactDeduplication:
+            return "Removes optional blocks whose text is byte-for-byte identical to the instructions, a required block or a higher-priority copy. Nothing else is removed and the budget is not applied."
+        case .budgetSelection:
+            return "Keeps required content, then adds optional blocks from highest to lowest priority (ties in prompt order) while the estimated total stays within the budget. Exact deduplication runs first only if enabled."
         }
     }
 }
 
-public enum LabError: LocalizedError {
+public struct SelectionSettings: Codable, Equatable, Hashable, Sendable {
+    public static let budgetRange = 1...1_000_000
+
+    public var strategy: SelectionStrategy
+    /// Token budget measured with `counter`. Enforced only by `.budgetSelection`; reported for all strategies.
+    public var budget: Int
+    /// Only used by `.budgetSelection`: remove exact duplicates before selecting by budget.
+    public var deduplicateBeforeBudget: Bool
+    public var counter: CounterChoice
+
+    public init(strategy: SelectionStrategy = .budgetSelection, budget: Int = 1000,
+                deduplicateBeforeBudget: Bool = false, counter: CounterChoice = .approximate(bytesPerToken: 4)) {
+        self.strategy = strategy; self.budget = budget
+        self.deduplicateBeforeBudget = deduplicateBeforeBudget; self.counter = counter
+    }
+
+    /// Whether this configuration performs exact deduplication.
+    public var deduplicates: Bool {
+        switch strategy {
+        case .baseline: return false
+        case .exactDeduplication: return true
+        case .budgetSelection: return deduplicateBeforeBudget
+        }
+    }
+
+    public var enforcesBudget: Bool { strategy == .budgetSelection }
+
+    public func validate() throws {
+        guard Self.budgetRange.contains(budget) else {
+            throw LabError.invalid("Budget must be between 1 and 1,000,000 tokens (found \(budget)).")
+        }
+        try counter.validate()
+    }
+}
+
+/// Which token counter a project uses. Stored in project files so previews and experiments are reproducible.
+public enum CounterChoice: Codable, Equatable, Hashable, Sendable {
+    case approximate(bytesPerToken: Int)
+    case bpe(encoding: BPEEncodingID)
+
+    public static let bytesPerTokenRange = 1...8
+
+    public func validate() throws {
+        if case .approximate(let n) = self, !Self.bytesPerTokenRange.contains(n) {
+            throw LabError.invalid("Approximate counter must use 1–8 bytes per token (found \(n)).")
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .approximate(let n): return "Approximate (UTF-8 bytes ÷ \(n))"
+        case .bpe(let encoding): return "\(encoding.rawValue) text tokens"
+        }
+    }
+}
+
+// MARK: - Errors
+
+public enum LabError: LocalizedError, Equatable {
     case invalid(String)
-    public var errorDescription: String? { if case .invalid(let message) = self { return message }; return nil }
+    case malformed(String)
+    case unsupportedSchema(found: Int, supported: Int)
+    case counterUnavailable(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalid(let message): return message
+        case .malformed(let message): return "The file could not be read: \(message)"
+        case .unsupportedSchema(let found, let supported):
+            if found > supported {
+                return "This project uses schema version \(found), which is newer than this app supports (\(supported)). Nothing was changed."
+            }
+            return "Schema version \(found) is not supported. This app reads versions 1–\(supported). Nothing was changed."
+        case .counterUnavailable(let message): return message
+        }
+    }
 }

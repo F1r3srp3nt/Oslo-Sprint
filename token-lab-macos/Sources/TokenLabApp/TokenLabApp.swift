@@ -3,39 +3,80 @@ import AppKit
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: AppStore?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Needed when launched with `swift run`, which starts a bare executable rather than an app bundle.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let store, store.hasUnsavedChanges else { return .terminateNow }
-        let alert = NSAlert(); alert.messageText = "Quit without saving?"
-        alert.informativeText = "Your project has unsaved changes. Cancel and use File → Save Project to keep them."
-        alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Quit Without Saving")
-        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        guard let store, !store.allowTerminationWithoutPrompt else { return .terminateNow }
+        return store.confirmUnsavedChanges(before: "quitting") ? .terminateNow : .terminateCancel
     }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
 @main struct TokenLabApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = AppStore()
-    @AppStorage("appearance") private var appearance = "System"
+    @AppStorage(StoredPreference.appearance) private var appearance = "System"
+
     var body: some Scene {
         Window("Token Lab", id: "main") {
-            ContentView().environmentObject(store)
+            ContentView()
+                .environmentObject(store)
+                .environmentObject(store.encodings)
                 .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
                 .onAppear { delegate.store = store }
         }
-        .defaultSize(width: 1180, height: 780)
+        .defaultSize(width: 1240, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Project") { store.newProject() }.keyboardShortcut("n")
-                Button("Open Project…") { store.openProject() }.keyboardShortcut("o")
+                Button("New Project") { store.newProject() }
+                    .keyboardShortcut("n")
+                Button("Open Project…") { store.openProject() }
+                    .keyboardShortcut("o")
+                Divider()
+                Button("Load Example Project") { store.loadExample() }
             }
             CommandGroup(replacing: .saveItem) {
-                Button("Save Project…") { store.saveProject() }.keyboardShortcut("s")
-                Button("Export Current Report…") { store.exportReport() }.disabled(store.currentReport == nil)
+                Button("Close Window") { store.requestCloseWindow(NSApp.keyWindow ?? NSApp.mainWindow) }
+                    .keyboardShortcut("w")
+                Button("Save Project") { _ = store.save() }
+                    .keyboardShortcut("s")
+                Button("Save Project As…") { _ = store.saveAs() }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
+                Button("Export Current Report…") { store.exportReport() }
+                    .keyboardShortcut("e")
+                    .disabled(store.currentReport == nil)
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { store.selectedSection = .settings }
+                    .keyboardShortcut(",")
+            }
+            CommandMenu("Prompt") {
+                Button("Update Preview") { store.preview() }
+                    .keyboardShortcut(.return)
+                Button("Save Preview as Experiment") { store.saveExperiment() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(store.currentReport == nil)
+                Button("Copy Selected Prompt") { store.copySelectedPrompt() }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .disabled(store.currentReport == nil)
+                Divider()
+                Button("Add Context Block") { store.addWorkspaceBlock() }
+                    .keyboardShortcut("n", modifiers: [.command, .option])
+                Button("New Library Item") { store.selectedSection = .library; store.newLibraryItem() }
+            }
+            CommandGroup(after: .sidebar) {
+                Divider()
+                ForEach(AppSection.allCases) { section in
+                    Button(section.title) { store.selectedSection = section }
+                        .keyboardShortcut(KeyEquivalent(section.shortcutKey), modifiers: .command)
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Builds a local development .app. Does not notarize, publish, upload or install anything.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ "$(uname -s)" != Darwin ]]; then
@@ -6,9 +7,10 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 1
 fi
 swift test
-swift build -c release
+swift build -c release --product TokenLab
 binary_dir="$(swift build -c release --show-bin-path)"
 app_dir="$PWD/dist/Token Lab.app"
+rm -rf "$app_dir"
 mkdir -p "$app_dir/Contents/MacOS"
 cp "$binary_dir/TokenLab" "$app_dir/Contents/MacOS/TokenLab"
 cat > "$app_dir/Contents/Info.plist" <<'PLIST'
@@ -20,10 +22,11 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>TokenLab</string>
 <key>CFBundleIdentifier</key><string>dev.tokenlab.prototype</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.2.0</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>0.3.0</string>
+<key>CFBundleVersion</key><string>3</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
 </dict></plist>
 PLIST
 codesign --force --sign - "$app_dir"
