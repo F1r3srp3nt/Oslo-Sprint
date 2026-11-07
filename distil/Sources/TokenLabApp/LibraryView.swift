@@ -31,8 +31,10 @@ struct LibraryView: View {
                         .tag(item.id)
                         .contextMenu { rowMenu(item) }
                 }
+                .scrollContentBackground(.hidden)
                 .overlay { emptyState }
             }
+            .background(DS.surface.opacity(0.45))
             .frame(minWidth: 220, idealWidth: 290, maxWidth: 420, maxHeight: .infinity)
 
             Group {

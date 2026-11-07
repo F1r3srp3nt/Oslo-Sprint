@@ -1,19 +1,20 @@
 import RelayCore
 import SwiftUI
 
-/// Relay's restrained dark palette. Colour always comes with a text label, never alone.
+/// Relay's palette, defined by the shared design tokens in `DesignSystem.swift`.
+/// Colour always comes with a text label, never alone.
 enum Theme {
-    static let background = Color(red: 0.055, green: 0.062, blue: 0.074)
-    static let panel = Color(red: 0.090, green: 0.100, blue: 0.118)
-    static let panelRaised = Color(red: 0.118, green: 0.130, blue: 0.153)
-    static let stroke = Color.white.opacity(0.08)
-    static let textPrimary = Color(white: 0.93)
-    static let textSecondary = Color(white: 0.62)
-    static let accent = Color(red: 0.36, green: 0.78, blue: 0.74)
-    static let success = Color(red: 0.38, green: 0.78, blue: 0.49)
-    static let warning = Color(red: 0.96, green: 0.72, blue: 0.30)
-    static let danger = Color(red: 0.94, green: 0.38, blue: 0.38)
-    static let simulation = Color(red: 0.64, green: 0.57, blue: 0.96)
+    static let background = DS.canvas
+    static let panel = DS.surface
+    static let panelRaised = DS.surfaceRaised
+    static let stroke = DS.accent.opacity(0.16)
+    static let textPrimary = DS.textPrimary
+    static let textSecondary = DS.textSecondary
+    static let accent = DS.accent
+    static let success = DS.success
+    static let warning = DS.warning
+    static let danger = DS.danger
+    static let simulation = DS.simulation
 
     static func color(_ kind: LogKind) -> Color {
         switch kind {
@@ -74,14 +75,13 @@ enum Theme {
 
 struct Panel<Content: View>: View {
     var padding: CGFloat = 14
+    var highlighted = false
     @ViewBuilder var content: Content
 
     var body: some View {
         content
-            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.stroke))
+            .dsPanel(padding: padding, highlighted: highlighted)
     }
 }
 
@@ -89,47 +89,64 @@ struct StatusPill: View {
     let text: String
     let color: Color
     var filled = false
+    var systemImage: String? = nil
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(color).frame(width: 7, height: 7)
+            if let systemImage {
+                Image(systemName: systemImage).imageScale(.small).foregroundStyle(filled ? Theme.background : color)
+            } else {
+                Circle().fill(color).frame(width: 7, height: 7)
+            }
             Text(text).font(.caption.weight(.medium)).foregroundStyle(filled ? Theme.background : Theme.textPrimary)
+                .lineLimit(1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(filled ? color : color.opacity(0.14), in: Capsule())
-        .overlay(Capsule().stroke(color.opacity(0.35)))
+        .overlay(Capsule().strokeBorder(color.opacity(contrast == .increased ? 0.85 : 0.35)))
         .accessibilityElement(children: .combine)
     }
 }
 
+/// Always-visible mode marker. Simulation uses a dashed violet frame and a test-tube symbol; live
+/// uses a solid amber frame and an antenna symbol, so the two never look alike.
 struct ModeBanner: View {
     let mode: ExecutionMode
     let detail: String
 
     var body: some View {
+        let simulated = mode == .simulation
+        let tint = simulated ? Theme.simulation : Theme.warning
         HStack(spacing: 10) {
-            Image(systemName: mode == .simulation ? "testtube.2" : "antenna.radiowaves.left.and.right")
+            Image(systemName: simulated ? "testtube.2" : "antenna.radiowaves.left.and.right")
             Text(mode.label).font(.caption.weight(.bold)).tracking(1.2)
-            Text(detail).font(.caption)
-            Spacer()
+            Text(detail).font(.caption).foregroundStyle(Theme.textPrimary)
+            Spacer(minLength: 0)
         }
-        .foregroundStyle(mode == .simulation ? Theme.simulation : Theme.warning)
+        .foregroundStyle(tint)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background((mode == .simulation ? Theme.simulation : Theme.warning).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 8))
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: DS.Radius.control + 2))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.control + 2)
+            .strokeBorder(tint.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: simulated ? [4, 3] : [])))
+        .accessibilityElement(children: .combine)
     }
 }
 
+/// Page title and description, using the shared page-header typography.
 struct SectionHeader: View {
     let title: String
     let subtitle: String
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.textPrimary)
-            Text(subtitle).font(.callout).foregroundStyle(Theme.textSecondary)
+            Text(title).font(DS.Typeface.pageTitle).foregroundStyle(Theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Text(subtitle).font(.callout).foregroundStyle(DS.secondaryText(contrast))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -141,10 +158,7 @@ struct LabeledRow<Content: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
-                .tracking(0.8)
-                .foregroundStyle(Theme.textSecondary)
+            Text(label).dsColumnHeader()
                 .frame(width: 92, alignment: .leading)
             content.frame(maxWidth: .infinity, alignment: .leading)
         }

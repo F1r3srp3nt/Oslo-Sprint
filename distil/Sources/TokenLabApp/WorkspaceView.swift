@@ -253,7 +253,7 @@ struct SelectionSettingsPanel: View {
                         .accessibilityLabel("Token budget")
                     Stepper("Token budget", value: budget, in: SelectionSettings.budgetRange, step: 50).labelsHidden()
                     Pill(text: settings.enforcesBudget ? "Enforced" : "Reported only",
-                         color: settings.enforcesBudget ? .blue : .secondary)
+                         color: settings.enforcesBudget ? DS.accent : DS.textSecondary)
                     Spacer()
                 }
                 if settings.enforcesBudget {
@@ -342,7 +342,7 @@ struct ContextBlockEditor: View {
                     }
                     Spacer(minLength: 0)
                     if let decision {
-                        Pill(text: decision.kind.label, color: decision.kind.color)
+                        Pill(text: decision.kind.label, color: decision.kind.color, systemImage: decision.kind.symbol)
                             .help(decision.reason)
                     }
                     Text(tokenLabel).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -374,7 +374,8 @@ struct PreviewPanel: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.35))
+        .background(DS.surface.opacity(0.45))
+        .overlay(alignment: .leading) { Rectangle().fill(DS.accent.opacity(0.16)).frame(width: 1) }
     }
 
     @ViewBuilder private var content: some View {
@@ -430,13 +431,13 @@ struct ReportView: View {
                     }
                     .font(.callout)
                     if let note = report.relevanceNote {
-                        Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(.orange)
+                        Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(DS.warning)
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Decisions").font(.subheadline.weight(.semibold))
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: "lock.fill").foregroundStyle(.blue).frame(width: 16).accessibilityHidden(true)
+                        Image(systemName: "lock.fill").foregroundStyle(DS.accent).frame(width: 16).accessibilityHidden(true)
                         Text("Protected instructions (first) and task (last) — kept verbatim.").font(.callout)
                     }
                     ForEach(report.decisions) { DecisionRow(decision: $0, tokenUnit: unit) }
@@ -463,12 +464,14 @@ struct ReportView: View {
     private var unit: String { report.counter.kind == .approximation ? "est." : "tok." }
 
     private var budgetBanner: some View {
-        Label(report.budgetSummary, systemImage: report.overBudget ? "exclamationmark.triangle.fill" : "checkmark.seal")
+        // A budget fit is a measurement, so it uses the accent; amber only when over budget.
+        Label(report.budgetSummary, systemImage: report.overBudget ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.33percent")
             .font(.callout)
-            .foregroundStyle(report.overBudget ? Color.orange : Color.primary)
+            .foregroundStyle(report.overBudget ? DS.warning : DS.textPrimary)
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background((report.overBudget ? Color.orange : Color.green).opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            .background((report.overBudget ? DS.warning : DS.accent).opacity(0.09), in: RoundedRectangle(cornerRadius: DS.Radius.control + 2))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.control + 2).strokeBorder((report.overBudget ? DS.warning : DS.accent).opacity(0.3)))
             .accessibilityLabel(report.budgetSummary)
     }
 }
@@ -479,10 +482,11 @@ struct ReportMetrics: View {
         VStack(alignment: .leading, spacing: 6) {
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
-                    MetricTile(title: "Full context", value: "\(report.originalTokens)")
-                    MetricTile(title: "Selected", value: "\(report.selectedTokens)")
+                    MetricTile(title: "Full context", value: "\(report.originalTokens)", systemImage: "text.alignleft")
+                    MetricTile(title: "Selected", value: "\(report.selectedTokens)", systemImage: "line.3.horizontal.decrease")
                     MetricTile(title: "Est. reduction", value: percentString(report.estimatedReductionPercent),
-                               caption: "\(report.estimatedReduction) fewer")
+                               caption: "\(report.estimatedReduction) fewer · input size, not quality",
+                               systemImage: "arrow.down.right")
                 }
             }
             Text("\(report.counter.displayName). \(report.counter.scope) Not provider-reported usage and not a cost saving.")

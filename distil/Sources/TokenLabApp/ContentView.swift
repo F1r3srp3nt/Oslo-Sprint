@@ -5,11 +5,10 @@ import TokenLabCore
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
 
-    /// Single-selection binding that never becomes nil, so clicking empty sidebar space
-    /// cannot clear the highlight while the detail pane keeps showing a section.
-    private var sectionSelection: Binding<AppSection?> {
+    /// Non-optional selection for the sidebar, so the highlight can never be cleared.
+    private var sectionSelection: Binding<AppSection> {
         Binding(get: { store.selectedSection ?? .overview },
-                set: { if let section = $0 { store.selectedSection = section } })
+                set: { store.selectedSection = $0 })
     }
 
     var body: some View {
@@ -22,6 +21,9 @@ struct ContentView: View {
                 .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
                 .layoutPriority(1)
         }
+        .background(DSBackground())
+        .groupBoxStyle(DSPanelGroupBoxStyle())
+        .tint(DS.accent)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button { store.openProject() } label: { Label("Open Project", systemImage: "folder") }
@@ -48,43 +50,48 @@ struct ContentView: View {
     static let detailMinWidth: CGFloat = 560
 
     private var sidebar: some View {
-        List(selection: sectionSelection) {
-            Section("Project") {
-                ForEach([AppSection.overview, .workspace, .comparison, .library, .experiments]) { section in
-                    Label(section.title, systemImage: section.symbol)
-                        .badge(badge(for: section))
-                        .tag(section)
-                }
-            }
-            Section("App") {
-                Label(AppSection.settings.title, systemImage: AppSection.settings.symbol).tag(AppSection.settings)
-            }
-        }
-        .listStyle(.sidebar)
-        .accessibilityLabel("Sections")
-        .safeAreaInset(edge: .bottom) {
+        DSSidebar(groups: [
+            DSSidebarGroup(title: "Project", items: [AppSection.overview, .workspace, .comparison, .library, .experiments].map(item)),
+            DSSidebarGroup(title: "App", items: [item(.settings)])
+        ], selection: sectionSelection) {
             VStack(alignment: .leading, spacing: 4) {
-                Label("Local only", systemImage: "desktopcomputer").font(.callout)
-                Text("No model connected · no network use").font(.caption).foregroundStyle(.secondary)
+                Label("Local only", systemImage: "desktopcomputer").font(.callout).foregroundStyle(DS.textSecondary)
+                Text("No model connected · no network use").font(.caption).foregroundStyle(DS.textTertiary)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .top) { Rectangle().fill(DS.accent.opacity(0.16)).frame(height: 1) }
         }
+    }
+
+    private func item(_ section: AppSection) -> DSSidebarItem<AppSection> {
+        let count = badge(for: section)
+        let noun: String
+        switch section {
+        case .workspace: noun = "context blocks"
+        case .library: noun = "library items"
+        case .experiments: noun = "experiments"
+        default: noun = ""
+        }
+        return DSSidebarItem(id: section, title: section.title, symbol: section.symbol, badge: count, badgeDescription: "\(count) \(noun)")
     }
 
     private var detail: some View {
         let section = store.selectedSection ?? .overview
-        return Group {
-            switch section {
-            case .overview: OverviewView()
-            case .workspace: WorkspaceView()
-            case .comparison: ComparisonView()
-            case .library: LibraryView()
-            case .experiments: ExperimentsView()
-            case .settings: SettingsView()
+        return VStack(spacing: 0) {
+            DSPageHeader(title: section.title, subtitle: section.subtitle)
+            Group {
+                switch section {
+                case .overview: OverviewView()
+                case .workspace: WorkspaceView()
+                case .comparison: ComparisonView()
+                case .library: LibraryView()
+                case .experiments: ExperimentsView()
+                case .settings: SettingsView()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(section.title)
         .navigationSubtitle(store.windowSubtitle)
         .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
@@ -105,11 +112,12 @@ struct StatusBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(store.hasUnsavedChanges ? Color.orange : Color.secondary.opacity(0.5))
+                .fill(store.hasUnsavedChanges ? DS.warning : DS.textTertiary)
                 .frame(width: 7, height: 7)
                 .accessibilityHidden(true)
             Text(store.hasUnsavedChanges ? "Unsaved changes" : "Saved")
                 .font(.caption.weight(.medium))
+                .foregroundStyle(store.hasUnsavedChanges ? DS.warning : DS.textSecondary)
             Text("·").foregroundStyle(.tertiary)
             Text(store.status)
                 .font(.caption)
@@ -121,7 +129,8 @@ struct StatusBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.bar)
+        .background(DS.surface.opacity(0.85))
+        .overlay(alignment: .top) { Rectangle().fill(DS.accent.opacity(0.16)).frame(height: 1) }
         .accessibilityElement(children: .combine)
     }
 }

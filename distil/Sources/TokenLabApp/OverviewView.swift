@@ -19,7 +19,8 @@ struct OverviewView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                        .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.panel))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel).strokeBorder(DS.warning.opacity(0.35)))
                 }
                 if isEmptyProject { gettingStarted }
                 if !document.draft.task.isEmpty {
@@ -72,7 +73,7 @@ struct OverviewView: View {
                 } else {
                     Label("Not saved to a file yet", systemImage: "doc.badge.ellipsis")
                 }
-                if store.hasUnsavedChanges { Pill(text: "Unsaved changes", color: .orange) }
+                if store.hasUnsavedChanges { Pill(text: "Unsaved changes", color: DS.warning, systemImage: "pencil.circle") }
             }
             .font(.callout).foregroundStyle(.secondary)
             HStack {
@@ -137,7 +138,7 @@ struct OverviewView: View {
                     LabeledContent("Estimated reduction", value: percentString(report.estimatedReductionPercent))
                     LabeledContent("Kept / removed", value: "\(report.keptCount) / \(report.removedCount)")
                     if report.overBudget {
-                        Label("Over budget by \(report.overBudgetBy)", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Label("Over budget by \(report.overBudgetBy)", systemImage: "exclamationmark.triangle").foregroundStyle(DS.warning)
                     }
                 } else {
                     Text(store.hasStaleReport ? "The last preview is out of date." : "No current preview.")
@@ -166,8 +167,7 @@ struct OverviewView: View {
                         HStack {
                             Text(experiment.name).lineLimit(1)
                             Spacer()
-                            Pill(text: experiment.evaluation.verdict.label,
-                                 color: experiment.evaluation.isEvaluated ? .blue : .secondary)
+                            VerdictBadge(evaluation: experiment.evaluation)
                         }
                         .contentShape(Rectangle())
                     }

@@ -143,6 +143,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func importEncoding(_ id: BPEEncodingID) {
@@ -190,7 +191,7 @@ struct EncodingRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(id.rawValue).font(.headline.monospaced())
-                Pill(text: state.label, color: state == .ready ? .green : .secondary)
+                Pill(text: state.label, color: state == .ready ? DS.success : DS.textSecondary, systemImage: state == .ready ? "checkmark.circle" : "circle.dashed")
                 Spacer()
                 if importing { ProgressView().controlSize(.small) }
                 Button(state == .notInstalled ? "Import File…" : "Replace…", action: onImport).disabled(importing)

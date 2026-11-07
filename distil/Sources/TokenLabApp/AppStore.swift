@@ -23,6 +23,17 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .settings: return "Settings"
         }
     }
+    /// One-line description shown in the page header.
+    var subtitle: String {
+        switch self {
+        case .overview: return "Project status, current settings and entry points."
+        case .workspace: return "Task, protected instructions and context — and exactly what would be sent."
+        case .comparison: return "The same input through four configurations, side by side."
+        case .library: return "Reusable context. Inserted copies are independent."
+        case .experiments: return "Saved snapshots, recorded answers and manual quality review."
+        case .settings: return "Appearance, token counting, ranking and local data."
+        }
+    }
     var symbol: String {
         switch self {
         case .overview: return "square.grid.2x2"

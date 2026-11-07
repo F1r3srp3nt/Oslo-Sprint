@@ -58,26 +58,47 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selection: AppSection? = .assistant
+    @State private var selection: AppSection = .assistant
 
     var body: some View {
-        NavigationSplitView {
-            List(AppSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .badge(badge(for: section))
+        // A persistent split view (not an adaptive NavigationSplitView), so the sidebar never
+        // collapses when a section needs more width. The window controls stay native.
+        HSplitView {
+            DSSidebar(groups: [DSSidebarGroup(title: "Relay", items: AppSection.allCases.map(item))],
+                      selection: $selection, topInset: 30) {
+                sidebarFooter
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220)
-            .safeAreaInset(edge: .bottom) { sidebarFooter }
-        } detail: {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-                detail
-            }
+            .frame(minWidth: 200, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+            detail
+                .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
         }
+        .background(DSBackground())
+        .groupBoxStyle(DSPanelGroupBoxStyle())
         .alert("Relay", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
             Button("OK", role: .cancel) { model.notice = nil }
         } message: {
             Text(model.notice ?? "")
+        }
+    }
+
+    private func item(_ section: AppSection) -> DSSidebarItem<AppSection> {
+        let count = badge(for: section)
+        let meaning: String
+        switch section {
+        case .tasks: meaning = "\(count) need attention"
+        case .wybe: meaning = "simulation running"
+        default: meaning = "\(count)"
+        }
+        return DSSidebarItem(id: section, title: section.title, symbol: section.symbol, badge: count, badgeDescription: meaning)
+    }
+
+    private var speechSymbol: String {
+        switch model.connectionStatus {
+        case .connected: return "checkmark.circle"
+        case .failed: return "exclamationmark.triangle"
+        case .unconfigured: return "keyboard"
+        default: return "circle.dashed"
         }
     }
 
@@ -90,7 +111,7 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var detail: some View {
-        switch selection ?? .assistant {
+        switch selection {
         case .assistant: AssistantView()
         case .tasks: TasksView()
         case .training: TrainingView()
@@ -102,20 +123,21 @@ struct ContentView: View {
 
     private var sidebarFooter: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Divider()
             HStack(spacing: 6) {
-                Circle().fill(Theme.color(model.connectionStatus)).frame(width: 7, height: 7)
+                Image(systemName: speechSymbol).imageScale(.small).foregroundStyle(Theme.color(model.connectionStatus))
                 Text("Speech: \(model.connectionStatus.label)").font(.caption).foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
             }
             if model.wybeRunning {
                 HStack(spacing: 6) {
-                    Circle().fill(Theme.simulation).frame(width: 7, height: 7)
+                    Image(systemName: "testtube.2").imageScale(.small).foregroundStyle(Theme.simulation)
                     Text("Wybe simulation running").font(.caption).foregroundStyle(Theme.textSecondary)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.stroke).frame(height: 1) }
+        .accessibilityElement(children: .combine)
     }
 }

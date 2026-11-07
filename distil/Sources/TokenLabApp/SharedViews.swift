@@ -1,33 +1,34 @@
 import SwiftUI
 import TokenLabCore
 
+/// Metric summary tile (design-system measurement panel).
 struct MetricTile: View {
     let title: String
     let value: String
     var caption: String? = nil
+    var systemImage: String? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.6)
-            if let caption { Text(caption).font(.caption2).foregroundStyle(.secondary).lineLimit(2) }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .combine)
+        DSMetric(title: title, value: value, caption: caption, systemImage: systemImage)
     }
 }
 
+/// Compact status label. Text always carries the meaning; the colour only reinforces it.
 struct Pill: View {
     let text: String
-    var color: Color = .secondary
+    var color: Color = DS.textSecondary
+    var systemImage: String? = nil
+    @Environment(\.colorSchemeContrast) private var contrast
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .foregroundStyle(color)
-            .background(color.opacity(0.12), in: Capsule())
+        HStack(spacing: 3) {
+            if let systemImage { Image(systemName: systemImage).imageScale(.small) }
+            Text(text).lineLimit(1)
+        }
+        .font(.caption2.weight(.semibold))
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .foregroundStyle(color)
+        .background(color.opacity(0.13), in: Capsule())
+        .overlay(Capsule().strokeBorder(color.opacity(contrast == .increased ? 0.85 : 0.32)))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -50,14 +51,47 @@ extension DecisionKind {
         case .excludedByBudget: return "minus.circle"
         }
     }
+    /// Retention is a selection outcome, not a quality judgement: kept blocks use the accent,
+    /// never the success green that is reserved for evaluated, passing answers.
     var color: Color {
         switch self {
-        case .required: return .blue
-        case .retained: return .green
-        case .emptySkipped: return .secondary
-        case .duplicateRemoved: return .purple
-        case .excludedByBudget: return .orange
+        case .required: return DS.accent
+        case .retained: return DS.accent
+        case .emptySkipped: return DS.textTertiary
+        case .duplicateRemoved: return DS.simulation
+        case .excludedByBudget: return DS.warning
         }
+    }
+}
+
+extension QualityVerdict {
+    /// Not evaluated is always neutral: an unevaluated result is never styled as a success.
+    var tone: DSTone {
+        switch self {
+        case .notEvaluated: return .neutral
+        case .equivalent: return .success
+        case .acceptableWithLosses, .degraded: return .warning
+        case .unusable: return .danger
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .notEvaluated: return "questionmark.circle"
+        case .equivalent: return "checkmark.seal"
+        case .acceptableWithLosses: return "exclamationmark.circle"
+        case .degraded: return "arrow.down.circle"
+        case .unusable: return "xmark.octagon"
+        }
+    }
+}
+
+/// Answer-quality status. Visually distinct from token measurements.
+struct VerdictBadge: View {
+    let evaluation: Evaluation
+    var body: some View {
+        DSBadge(text: evaluation.isEvaluated ? evaluation.verdict.label : "Quality not evaluated",
+                systemImage: evaluation.verdict.symbol, tone: evaluation.verdict.tone)
+            .help(evaluation.statusLabel)
     }
 }
 
@@ -82,7 +116,7 @@ struct DecisionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(decision.title).fontWeight(.medium).lineLimit(1)
-                    Pill(text: decision.kind.label, color: decision.kind.color)
+                    Pill(text: decision.kind.label, color: decision.kind.color, systemImage: decision.kind.symbol)
                     Spacer(minLength: 4)
                     Text("\(decision.standaloneTokens) \(tokenUnit)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
@@ -151,7 +185,7 @@ struct RankingMethodView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Text("A keyword match is not evidence that a block is useful or that an answer will be correct.")
-                .font(.caption.weight(.medium)).foregroundStyle(.orange)
+                .font(.caption.weight(.medium)).foregroundStyle(DS.warning)
         }
     }
 }
@@ -169,7 +203,7 @@ struct PromptTextView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).font(.subheadline.weight(.semibold))
+                Text(title).dsColumnHeader()
                 Spacer()
                 if let onCopy {
                     Button(action: onCopy) { Label("Copy", systemImage: "doc.on.doc") }
@@ -179,18 +213,18 @@ struct PromptTextView: View {
             }
             ScrollView {
                 Text(text.isEmpty ? "(empty)" : displayed)
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
+                    .font(DS.Typeface.editor)
+                    .lineSpacing(2)
+                    .foregroundStyle(text.isEmpty ? DS.textTertiary : DS.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(10)
             }
             .frame(minHeight: minHeight, maxHeight: maxHeight)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.12)))
+            .dsFieldChrome()
             if text.count > Self.displayLimit {
                 Text("Showing the first \(Self.displayLimit.formatted()) of \(text.count.formatted()) characters. Copy gets the complete text.")
-                    .font(.caption).foregroundStyle(.orange)
+                    .font(.caption).foregroundStyle(DS.warning)
             }
         }
     }
@@ -200,20 +234,23 @@ struct PromptTextView: View {
     }
 }
 
-/// Bordered multi-line editor that works inside scroll views.
+/// Bordered multi-line editor for long text and code: monospaced, comfortable line spacing,
+/// sunken background, cyan border while focused.
 struct CodeEditor: View {
     @Binding var text: String
     var minHeight: CGFloat = 90
     var maxHeight: CGFloat = 320
     var accessibilityLabel: String
+    @FocusState private var focused: Bool
     var body: some View {
         TextEditor(text: $text)
-            .font(.system(.body, design: .monospaced))
-            .scrollContentBackground(.hidden)
-            .padding(6)
+            .font(DS.Typeface.editor)
+            .lineSpacing(2)
+            .foregroundStyle(DS.textPrimary)
+            .focused($focused)
+            .padding(8)
             .frame(minHeight: minHeight, maxHeight: maxHeight)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15)))
+            .dsFieldChrome(focused: focused)
             .accessibilityLabel(accessibilityLabel)
     }
 }

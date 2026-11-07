@@ -28,6 +28,8 @@ struct ExperimentsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(DS.surface.opacity(0.45))
             .frame(minWidth: 220, idealWidth: 270, maxWidth: 380, maxHeight: .infinity)
 
             Group {
@@ -64,7 +66,7 @@ struct ExperimentRow: View {
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             HStack(spacing: 6) {
                 if experiment.comparison != nil { Image(systemName: "rectangle.split.3x1").font(.caption2).foregroundStyle(.secondary).help("Part of a saved comparison") }
-                Pill(text: experiment.evaluation.verdict.label, color: experiment.evaluation.isEvaluated ? .blue : .secondary)
+                VerdictBadge(evaluation: experiment.evaluation)
                 Text(experiment.createdAt, style: .date).font(.caption2).foregroundStyle(.tertiary)
             }
         }
@@ -141,7 +143,7 @@ struct SnapshotTab: View {
             ReportMetrics(report: report)
             Label(report.budgetSummary, systemImage: report.overBudget ? "exclamationmark.triangle.fill" : "checkmark.seal")
                 .font(.callout)
-                .foregroundStyle(report.overBudget ? Color.orange : Color.primary)
+                .foregroundStyle(report.overBudget ? DS.warning : DS.textPrimary)
             GroupBox("Recorded settings") {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                     Group {
@@ -419,11 +421,11 @@ struct ReproduceTab: View {
                 switch result {
                 case .identical:
                     Label("Reproduced exactly: same selected prompt, decisions, counts and counter version.", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(DS.success)
                 case .differs(let reasons):
                     VStack(alignment: .leading, spacing: 4) {
                         Label("The result differs from the saved snapshot:", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(DS.warning)
                         ForEach(reasons, id: \.self) { Text("• \($0)") }
                     }
                 case .counterUnavailable(let message):
@@ -464,7 +466,7 @@ struct ComparisonGroupPanel: View {
                             Text("\(member.snapshot.selectedTokens) \(member.snapshot.counter.kind == .approximation ? "est." : member.snapshot.counter.encoding)")
                                 .monospacedDigit().foregroundStyle(.secondary)
                             Text("\(member.snapshot.keptCount) kept · \(member.snapshot.removedCount) removed").foregroundStyle(.secondary)
-                            Pill(text: member.evaluation.statusLabel, color: member.evaluation.isEvaluated ? .blue : .secondary)
+                            VerdictBadge(evaluation: member.evaluation)
                         }
                     }
                 }
