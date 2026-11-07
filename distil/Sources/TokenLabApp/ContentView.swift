@@ -53,14 +53,15 @@ struct ContentView: View {
         DSSidebar(groups: [
             DSSidebarGroup(title: "Project", items: [AppSection.overview, .workspace, .comparison, .library, .experiments].map(item)),
             DSSidebarGroup(title: "App", items: [item(.settings)])
-        ], selection: sectionSelection) {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Local only", systemImage: "desktopcomputer").font(.callout).foregroundStyle(DS.textSecondary)
-                Text("No model connected · no network use").font(.caption).foregroundStyle(DS.textTertiary)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .top) { Rectangle().fill(DS.accent.opacity(0.16)).frame(height: 1) }
+        ], selection: sectionSelection, topInset: DS.Space.s, brandName: "DISTIL", brandTagline: "Context selection lab") {
+            DSStatusCard(rows: [
+                DSStatusRow(label: "Project", value: store.hasUnsavedChanges ? "Unsaved changes" : "Saved",
+                            systemImage: store.hasUnsavedChanges ? "pencil.circle" : "checkmark.circle",
+                            tone: store.hasUnsavedChanges ? .warning : .neutral),
+                DSStatusRow(label: "Environment", value: "Local only", systemImage: "desktopcomputer", tone: .accent),
+                DSStatusRow(label: "Model connection", value: "None · no network use", systemImage: "bolt.horizontal.circle", tone: .neutral)
+            ])
+            .padding(DS.Space.s)
         }
     }
 
@@ -79,7 +80,7 @@ struct ContentView: View {
     private var detail: some View {
         let section = store.selectedSection ?? .overview
         return VStack(spacing: 0) {
-            DSPageHeader(title: section.title, subtitle: section.subtitle)
+            DSPageHeader(title: section.title, subtitle: section.subtitle, eyebrow: "DISTIL  /  \(section.title.uppercased())")
             Group {
                 switch section {
                 case .overview: OverviewView()

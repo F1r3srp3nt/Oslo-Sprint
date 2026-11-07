@@ -402,7 +402,7 @@ struct PreviewPanel: View {
                      : "Run the selection to see which context is kept and why.")
             } actions: {
                 Button("Update Preview") { store.preview() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
                     .disabled(store.isPreviewing)
             }
         }
@@ -420,7 +420,7 @@ struct ReportView: View {
                 budgetBanner
                 HStack {
                     Button { store.saveExperiment() } label: { Label("Save as Experiment", systemImage: "flask") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.dsPrimary)
                         .help("Snapshot the inputs, settings, counter and both prompts (⇧⌘E)")
                     Button { store.exportReport() } label: { Label("Export…", systemImage: "square.and.arrow.up") }
                         .help("Export this report as JSON (⌘E)")

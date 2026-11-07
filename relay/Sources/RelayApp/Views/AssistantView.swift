@@ -42,7 +42,8 @@ struct AssistantView: View {
     }
 
     private var header: some View {
-        DSPageHeader(title: "Assistant", subtitle: "What Relay heard, understood, planned, attempted — and what happened.") {
+        DSPageHeader(title: "Assistant", subtitle: "What Relay heard, understood, planned, attempted — and what happened.",
+                     eyebrow: "RELAY  /  ASSISTANT") {
             VStack(alignment: .trailing, spacing: 6) {
                 if speechConfigured {
                     HStack(spacing: 6) {
@@ -120,7 +121,7 @@ private struct SuggestionCard: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.accent).frame(width: 20)
+                DSIconTile(systemImage: symbol)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.callout.weight(.semibold)).foregroundStyle(Theme.textPrimary)
                     Text(detail).font(.caption).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
@@ -275,7 +276,7 @@ struct InteractionCard: View {
                 }
                 HStack(spacing: 8) {
                     if interaction.status == .awaitingApproval {
-                        Button("Approve") { model.approve(interaction) }.buttonStyle(.borderedProminent)
+                        Button("Approve") { model.approve(interaction) }.buttonStyle(.dsPrimary)
                         Button("Decline", role: .cancel) { model.decline(interaction) }
                     }
                     Spacer(minLength: 0)
@@ -344,7 +345,7 @@ struct InputBar: View {
                         .keyboardShortcut(".", modifiers: .command)
                 }
                 Button(action: send) { Label("Send", systemImage: "arrow.up.circle.fill") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
                     .controlSize(.large)
                     .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -439,7 +440,7 @@ struct TranscriptReviewBar: View {
                     Spacer()
                     Button("Discard", role: .cancel) { model.discardTranscript() }
                     Button("Send transcript") { model.submitTranscript() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.dsPrimary)
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(model.transcriptDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                 }

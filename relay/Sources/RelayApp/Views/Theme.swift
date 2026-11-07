@@ -143,6 +143,8 @@ struct SectionHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
+            Text("RELAY  /  \(title.uppercased())").font(DS.Typeface.eyebrow).tracking(1.4).foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
             Text(title).font(DS.Typeface.pageTitle).foregroundStyle(Theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Text(subtitle).font(.callout).foregroundStyle(DS.secondaryText(contrast))

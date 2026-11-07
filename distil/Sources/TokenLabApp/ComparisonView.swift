@@ -80,7 +80,7 @@ struct ComparisonView: View {
                      ? "The input, settings or counter changed. Old results are hidden so they cannot be mistaken for the current input."
                      : "Run all four configurations on the current input.")
             } actions: {
-                Button("Run Comparison") { store.runComparison() }.buttonStyle(.borderedProminent).disabled(store.isComparing)
+                Button("Run Comparison") { store.runComparison() }.buttonStyle(.dsPrimary).disabled(store.isComparing)
             }
         }
     }

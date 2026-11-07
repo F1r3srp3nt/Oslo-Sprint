@@ -64,8 +64,8 @@ struct ContentView: View {
         // A persistent split view (not an adaptive NavigationSplitView), so the sidebar never
         // collapses when a section needs more width. The window controls stay native.
         HSplitView {
-            DSSidebar(groups: [DSSidebarGroup(title: "Relay", items: AppSection.allCases.map(item))],
-                      selection: $selection, topInset: 30) {
+            DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
+                      selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
                 sidebarFooter
             }
             .frame(minWidth: 200, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
@@ -122,22 +122,22 @@ struct ContentView: View {
     }
 
     private var sidebarFooter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: speechSymbol).imageScale(.small).foregroundStyle(Theme.color(model.connectionStatus))
-                Text("Speech: \(model.connectionStatus.label)").font(.caption).foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-            }
-            if model.wybeRunning {
-                HStack(spacing: 6) {
-                    Image(systemName: "testtube.2").imageScale(.small).foregroundStyle(Theme.simulation)
-                    Text("Wybe simulation running").font(.caption).foregroundStyle(Theme.textSecondary)
-                }
-            }
+        DSStatusCard(rows: [
+            DSStatusRow(label: "Speech", value: model.connectionStatus.label, systemImage: speechSymbol, tone: speechTone),
+            DSStatusRow(label: "Wybe runner", value: model.wybeRunning ? "Simulation running" : "Idle · simulation only",
+                        systemImage: "testtube.2", tone: model.wybeRunning ? .simulation : .neutral),
+            DSStatusRow(label: "Reasoning", value: model.reasonerName.isEmpty ? "Built-in rules" : model.reasonerName,
+                        systemImage: "list.bullet.indent", tone: .neutral)
+        ])
+        .padding(DS.Space.s)
+    }
+
+    private var speechTone: DSTone {
+        switch model.connectionStatus {
+        case .connected: return .success
+        case .failed: return .danger
+        case .checking, .configuredUnverified: return .warning
+        case .unconfigured: return .neutral
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.stroke).frame(height: 1) }
-        .accessibilityElement(children: .combine)
     }
 }

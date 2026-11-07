@@ -78,7 +78,7 @@ struct OverviewView: View {
             .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Button { store.selectedSection = .workspace } label: { Label("Open Prompt Workspace", systemImage: "text.alignleft") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
                 Button { store.openProject() } label: { Label("Open Project…", systemImage: "folder") }
                 Button { _ = store.save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
                     .disabled(!store.hasUnsavedChanges && store.session.fileURL != nil)

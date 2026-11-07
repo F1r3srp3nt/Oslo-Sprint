@@ -128,7 +128,7 @@ struct LibraryDetail: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Button { store.useLibraryItem(item.id) } label: { Label("Insert into Workspace", systemImage: "arrow.down.doc") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.dsPrimary)
                         .disabled(item.text.isEmpty)
                     Button { store.duplicateLibraryItem(item.id) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                     Spacer()

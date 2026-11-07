@@ -11,12 +11,14 @@ import AppKit
 enum DS {
     // MARK: Colour tokens (dark first, with a readable light variant)
 
-    static let canvas = dynamic(dark: (0.027, 0.043, 0.082), light: (0.925, 0.945, 0.972))
-    static let canvasGlow = dynamic(dark: (0.051, 0.106, 0.204), light: (0.870, 0.912, 0.965))
-    static let surface = dynamic(dark: (0.055, 0.086, 0.149), light: (1.000, 1.000, 1.000))
-    static let surfaceRaised = dynamic(dark: (0.078, 0.118, 0.192), light: (0.960, 0.972, 0.988))
-    static let surfaceSunken = dynamic(dark: (0.033, 0.054, 0.098), light: (0.972, 0.980, 0.992))
-    static let accent = dynamic(dark: (0.33, 0.82, 0.96), light: (0.00, 0.42, 0.60))
+    static let canvas = dynamic(dark: (0.035, 0.059, 0.098), light: (0.925, 0.945, 0.972))
+    static let canvasGlow = dynamic(dark: (0.047, 0.137, 0.196), light: (0.870, 0.920, 0.955))
+    static let surface = dynamic(dark: (0.059, 0.106, 0.157), light: (1.000, 1.000, 1.000))
+    static let surfaceRaised = dynamic(dark: (0.082, 0.141, 0.204), light: (0.960, 0.972, 0.988))
+    static let surfaceSunken = dynamic(dark: (0.031, 0.063, 0.102), light: (0.972, 0.980, 0.992))
+    static let accent = dynamic(dark: (0.30, 0.83, 0.93), light: (0.00, 0.42, 0.58))
+    /// Text and icons placed on a filled accent (or tone) background.
+    static let onAccent = dynamic(dark: (0.027, 0.055, 0.090), light: (1.0, 1.0, 1.0))
     static let textPrimary = dynamic(dark: (0.93, 0.95, 0.98), light: (0.06, 0.09, 0.16))
     static let textSecondary = dynamic(dark: (0.69, 0.75, 0.85), light: (0.26, 0.31, 0.41))
     static let textTertiary = dynamic(dark: (0.52, 0.59, 0.70), light: (0.40, 0.45, 0.54))
@@ -28,7 +30,7 @@ enum DS {
 
     /// Fine panel border. Stronger when the user asks for more contrast.
     static func border(_ contrast: ColorSchemeContrast, emphasised: Bool = false) -> Color {
-        let base = emphasised ? 0.42 : 0.16
+        let base = emphasised ? 0.50 : 0.20
         return accent.opacity(contrast == .increased ? min(1, base * 2.6) : base)
     }
 
@@ -43,11 +45,14 @@ enum DS {
     }
 
     enum Radius {
-        static let control: CGFloat = 6, panel: CGFloat = 10, large: CGFloat = 14
+        static let control: CGFloat = 8, panel: CGFloat = 12, large: CGFloat = 16
     }
 
     enum Typeface {
-        static let pageTitle = Font.system(size: 20, weight: .semibold)
+        static let pageTitle = Font.system(size: 24, weight: .bold)
+        /// Breadcrumbs and eyebrows above titles: monospaced capitals.
+        static let eyebrow = Font.system(size: 11, weight: .bold, design: .monospaced)
+        static let brand = Font.system(size: 15, weight: .heavy)
         static let sectionTitle = Font.headline
         static let caption = Font.caption
         static let label = Font.caption2.weight(.semibold)
@@ -117,7 +122,7 @@ struct DSGrid: View {
             while x <= size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += spacing }
             var y: CGFloat = 0
             while y <= size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += spacing }
-            context.stroke(path, with: .color(DS.gridLine.opacity(0.045)), lineWidth: 0.5)
+            context.stroke(path, with: .color(DS.gridLine.opacity(0.055)), lineWidth: 0.5)
         }
         .allowsHitTesting(false)
     }
@@ -191,12 +196,18 @@ extension View {
 struct DSPageHeader<Accessory: View>: View {
     let title: String
     let subtitle: String
+    /// Breadcrumb shown above the title, e.g. "DISTIL / WORKSPACE".
+    var eyebrow: String? = nil
     @ViewBuilder var accessory: Accessory
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(alignment: .center, spacing: DS.Space.m) {
             VStack(alignment: .leading, spacing: 3) {
+                if let eyebrow {
+                    Text(eyebrow).font(DS.Typeface.eyebrow).tracking(1.4).foregroundStyle(DS.accent)
+                        .accessibilityHidden(true)
+                }
                 Text(title).font(DS.Typeface.pageTitle).foregroundStyle(DS.textPrimary)
                     .accessibilityAddTraits(.isHeader)
                 Text(subtitle).font(.callout).foregroundStyle(DS.secondaryText(contrast))
@@ -213,8 +224,8 @@ struct DSPageHeader<Accessory: View>: View {
 }
 
 extension DSPageHeader where Accessory == EmptyView {
-    init(title: String, subtitle: String) {
-        self.init(title: title, subtitle: subtitle) { EmptyView() }
+    init(title: String, subtitle: String, eyebrow: String? = nil) {
+        self.init(title: title, subtitle: subtitle, eyebrow: eyebrow) { EmptyView() }
     }
 }
 
@@ -241,6 +252,9 @@ struct DSSidebar<ID: Hashable, Footer: View>: View {
     let groups: [DSSidebarGroup<ID>]
     @Binding var selection: ID
     var topInset: CGFloat = 0
+    /// Product name and descriptor shown as text at the top (no logo).
+    var brandName: String? = nil
+    var brandTagline: String? = nil
     @ViewBuilder var footer: Footer
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -250,6 +264,19 @@ struct DSSidebar<ID: Hashable, Footer: View>: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    if let brandName {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(brandName).font(DS.Typeface.brand).tracking(2.2).foregroundStyle(DS.textPrimary)
+                            if let brandTagline {
+                                Text(brandTagline).font(DS.Typeface.label).textCase(.uppercase).tracking(1.3)
+                                    .foregroundStyle(DS.textTertiary)
+                            }
+                            Rectangle().fill(DS.accent.opacity(0.35)).frame(width: 28, height: 2).padding(.top, 6)
+                        }
+                        .padding(.leading, 12).padding(.bottom, DS.Space.s)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isHeader)
+                    }
                     ForEach(groups) { group in
                         if let title = group.title {
                             Text(title)
@@ -310,7 +337,7 @@ struct DSSidebarRow<ID: Hashable>: View {
                 Image(systemName: item.symbol)
                     .font(DS.Typeface.sidebarIcon)
                     .frame(width: 18)
-                    .foregroundStyle(selected ? DS.accent : DS.textSecondary)
+                    .foregroundStyle(selected ? DS.textPrimary : DS.textSecondary)
                 Text(item.title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? DS.textPrimary : DS.secondaryText(contrast))
@@ -318,22 +345,28 @@ struct DSSidebarRow<ID: Hashable>: View {
                 Spacer(minLength: 4)
                 if item.badge > 0 {
                     Text("\(item.badge)")
-                        .font(.caption2.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(DS.textSecondary)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(DS.surfaceRaised, in: Capsule())
-                        .overlay(Capsule().strokeBorder(DS.border(contrast)))
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(DS.accent)
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(DS.accent.opacity(0.16), in: Capsule())
+                        .overlay(Capsule().strokeBorder(DS.accent.opacity(0.35)))
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
             .padding(.leading, 12)
             .padding(.trailing, 8)
             .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
-                .fill(selected ? DS.accent.opacity(contrast == .increased ? 0.26 : 0.14)
+                .fill(selected ? DS.accent.opacity(contrast == .increased ? 0.36 : 0.24)
                                : (hovering ? DS.textPrimary.opacity(0.05) : Color.clear)))
+            .overlay {
+                if selected {
+                    RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
+                        .strokeBorder(DS.accent.opacity(0.45), lineWidth: 1)
+                }
+            }
             .overlay(alignment: .leading) {
                 if selected {
-                    Capsule().fill(DS.accent).frame(width: 3, height: 16).padding(.leading, 3)
+                    Capsule().fill(DS.accent).frame(width: 3, height: 22).offset(x: -7)
                 }
             }
             .overlay {
@@ -416,5 +449,81 @@ struct DSEmptyState<Actions: View>: View {
         } actions: {
             actions
         }
+    }
+}
+
+// MARK: - Buttons, tiles, status cards
+
+/// Filled primary action: tone fill with dark text (high contrast on light cyan), clear pressed and
+/// disabled states. Keyboard focus rings are drawn by the system.
+struct DSPrimaryButtonStyle: ButtonStyle {
+    var tone: DSTone = .accent
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: controlSize == .large ? 14 : 13, weight: .semibold))
+            .foregroundStyle(DS.onAccent)
+            .padding(.horizontal, controlSize == .small ? 10 : 14)
+            .padding(.vertical, controlSize == .large ? 8 : (controlSize == .small ? 3 : 5))
+            .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
+                .fill(tone.color.opacity(configuration.isPressed ? 0.75 : 1)))
+            .opacity(isEnabled ? 1 : 0.4)
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous))
+    }
+}
+
+extension ButtonStyle where Self == DSPrimaryButtonStyle {
+    static var dsPrimary: DSPrimaryButtonStyle { DSPrimaryButtonStyle() }
+}
+
+/// Rounded-square symbol tile used to anchor cards.
+struct DSIconTile: View {
+    let systemImage: String
+    var tone: DSTone = .accent
+    var size: CGFloat = 30
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(tone.color)
+            .frame(width: size, height: size)
+            .background(tone.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(tone.color.opacity(0.35)))
+            .accessibilityHidden(true)
+    }
+}
+
+struct DSStatusRow: Identifiable {
+    let label: String
+    let value: String
+    var systemImage: String
+    var tone: DSTone = .neutral
+    var id: String { label }
+}
+
+/// Small bordered status card (for example at the bottom of a sidebar): caption label, value, and a
+/// symbol whose colour reinforces, but never replaces, the text.
+struct DSStatusCard: View {
+    let rows: [DSStatusRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(rows) { row in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.label).dsColumnHeader()
+                        Text(row.value).font(.caption.weight(.semibold)).foregroundStyle(DS.textPrimary)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: row.systemImage).imageScale(.small).foregroundStyle(row.tone.color)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsPanel(padding: 10, raised: true)
     }
 }
