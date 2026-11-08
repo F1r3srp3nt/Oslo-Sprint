@@ -10,6 +10,19 @@ dependencies, and does not use or touch `distil/` (Distil).
 > Eligibility for more than one challenge prize has **not** been confirmed. That is a
 > question for the organisers.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Relay Assistant: suggested requests and the typed request field, with speech not configured](docs/screenshots/01-assistant.png) | ![Relay Warehouse Training: synthetic Dock B procedure with English, Norwegian Bokmål and Polish](docs/screenshots/03-training.png) |
+| **Assistant**: suggested requests; everything works by typing. | **Warehouse Training**: a synthetic procedure, one step at a time, in three languages. |
+| ![Relay Wybe Runner: simulation controls, clearly marked SIMULATED, with live mode unavailable](docs/screenshots/04-wybe.png) | ![Relay Settings: appearance and speech readiness, with no API key saved](docs/screenshots/06-settings.png) |
+| **Wybe Runner**: simulation only; live mode is unavailable. | **Settings**: appearance and speech readiness (no key saved). |
+| ![Relay Settings in the Light appearance](docs/screenshots/07-settings-light.png) | |
+| **Light** appearance, Settings. | |
+
+<sub>Captured automatically by the macOS job of the Relay workflow, [run 42436936531](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42436936531), on `main` at commit `64f2ec15f4740344fee7f6802c4eb8a9a5904ee6` (version 0.2.0), on a fresh install: no API key, no tasks and no simulation run. The window is at its minimum size (980 points wide).</sub>
+
 ## Status of the first milestone
 
 | Part | State |
@@ -19,7 +32,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 | Warehouse training (text) | Complete and deterministic, with a **synthetic** procedure in en / nb / pl |
 | Wybe Night Shift | **Simulation only.** The live protocol hasn't been obtained, and live mode sends nothing |
 | ElevenLabs STT / TTS adapters | Implemented and tested against a fake transport, and checked against elevenlabs.io docs (2026-11-07). **Never called the real service** (no key) |
-| macOS SwiftUI app | An earlier version compiled on GitHub's macOS runner (Xcode 16.4). The guided-setup changes are **not yet compiled on macOS**; run `scripts/verify-macos.sh` |
+| macOS SwiftUI app | Compiles on GitHub's macOS 15 runner, which also launches it for the [screenshots](#screenshots). **Not yet tried by a person on a Mac**; run `scripts/verify-macos.sh` |
 
 ## Continuous integration
 
