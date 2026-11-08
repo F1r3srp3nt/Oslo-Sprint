@@ -67,6 +67,9 @@ narrow as it goes). Note anything grey, clipped, overlapping or hard to read.
 | Relay | Settings | Appearance segmented picker; readiness; key field (native secure field by design); About this build |
 
 Also check:
+- **Relay sidebar width.** Drag the line at the sidebar's edge: the resize cursor appears, and the
+  width stays within 200–290 points. Quit and reopen: the width is kept. At the minimum window width
+  (980 pt) the sidebar and all its rows stay visible.
 - **Keyboard.** Tab through controls: focus is visible on fields and buttons. ↑/↓ moves the sidebar
   selection when it has focus. Menu shortcuts work.
 - **Contrast.** System Settings › Accessibility › Display › *Increase contrast* removes the grid and

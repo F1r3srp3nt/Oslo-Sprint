@@ -71,24 +71,29 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: AppSection = .assistant
+    /// Sidebar width chosen by dragging the handle; clamped to what the window allows.
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 228
 
     var body: some View {
-        // A fixed-width sidebar beside the detail pane in one HStack (no AppKit split view or
-        // adaptive NavigationSplitView), so no section can collapse or blank the sidebar. The
-        // window controls stay native.
-        HStack(spacing: 0) {
-            DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
-                      selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
-                sidebarFooter
+        // A sidebar beside the detail pane in one HStack (no AppKit split view or adaptive
+        // NavigationSplitView), so no section can collapse or blank the sidebar. Its width is set by
+        // dragging the handle and remembered. The window controls stay native.
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
+                          selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
+                    sidebarFooter
+                }
+                .frame(width: Self.sidebarWidth(stored: sidebarWidth, windowWidth: proxy.size.width))
+                .frame(maxHeight: .infinity)
+                SidebarResizeHandle(width: $sidebarWidth, range: Self.sidebarMinWidth...Self.sidebarMaxWidth)
+                detail
+                    // Themed defaults for every screen; explicit styles (primary, link, plain) win.
+                    .buttonStyle(.dsSecondary)
+                    .textFieldStyle(.ds)
+                    .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+                    .layoutPriority(1)
             }
-            .frame(width: 228)
-            .frame(maxHeight: .infinity)
-            detail
-                // Themed defaults for every screen; explicit styles (primary, link, plain) win.
-                .buttonStyle(.dsSecondary)
-                .textFieldStyle(.ds)
-                .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(1)
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
@@ -97,6 +102,17 @@ struct ContentView: View {
         } message: {
             Text(model.notice ?? "")
         }
+    }
+
+    /// Window minimum (980) ≥ sidebar maximum + handle + detail minimum, so the full range fits.
+    static let sidebarMinWidth: CGFloat = 200
+    static let sidebarMaxWidth: CGFloat = 290
+    static let detailMinWidth: CGFloat = 680
+
+    /// The stored width, clamped to the range and to whatever leaves the detail pane its minimum.
+    static func sidebarWidth(stored: Double, windowWidth: CGFloat) -> CGFloat {
+        let upper = max(sidebarMinWidth, min(sidebarMaxWidth, windowWidth - detailMinWidth - SidebarResizeHandle.thickness))
+        return min(max(CGFloat(stored), sidebarMinWidth), upper)
     }
 
     private func item(_ section: AppSection) -> DSSidebarItem<AppSection> {
