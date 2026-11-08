@@ -8,16 +8,35 @@ A smaller prompt is not automatically a better prompt. Every number names the co
 
 ## Screenshots
 
+Real window captures of the packaged `Distil.app`, taken by the Distil workflow on GitHub's macOS runner. The project is the synthetic *Pasted notes* demonstration.
+
+**Prompt Workspace**: the task, protected instructions and context, and the proposed selection, which keeps 221 of 323 estimated tokens and says what was left out. *Captured 8 November 2026.*
+
+![Distil Prompt Workspace with the Pasted notes demonstration: task, protected instructions and the proposed selection, 323 to 221 estimated tokens](docs/screenshots/prompt-workspace.png)
+
+**Comparison**: the same input through four configurations, side by side. Answer quality stays "Not evaluated" until real answers are reviewed. *Captured 8 November 2026.*
+
+![Distil Comparison: Full context, Exact deduplication, Manual-priority budget and Task-relevance budget, with decisions by block](docs/screenshots/comparison.png)
+
+<details>
+<summary>More screens: Overview, Settings and the Light appearance (same run)</summary>
+
 | | |
 |---|---|
-| ![Distil Overview with an empty project: getting-started steps and the four demonstrations](docs/screenshots/01-overview-empty-project.png) | ![Distil Prompt Workspace with the Pasted notes demonstration: task, protected instructions and the proposed selection, 323 to 221 estimated tokens](docs/screenshots/03-workspace-demo.png) |
-| **Overview**, empty project: getting started and the demonstrations. | **Prompt Workspace**, *Pasted notes* demo: the selection keeps 221 of 323 estimated tokens and says what was left out. |
-| ![Distil Comparison: the same input through Full context, Exact deduplication, Manual-priority budget and Task-relevance budget](docs/screenshots/04-comparison-demo.png) | ![Distil Settings: appearance choices and token counting](docs/screenshots/07-settings-demo.png) |
-| **Comparison**: the same input through four configurations, with answer quality "Not evaluated". | **Settings**: appearance (Futuristic is the default) and token counting. |
-| ![Distil Prompt Workspace in the Light appearance](docs/screenshots/08-workspace-demo-light.png) | |
-| **Light** appearance, same workspace. | |
+| ![Distil Overview with an empty project: getting-started steps and the four demonstrations](docs/screenshots/overview.png) | ![Distil Settings: appearance choices and token counting](docs/screenshots/settings.png) |
+| **Overview**, empty project | **Settings** |
+| ![Distil Prompt Workspace in the Light appearance](docs/screenshots/prompt-workspace-light.png) | |
+| **Prompt Workspace**, Light appearance | |
 
-<sub>Captured automatically by the macOS job of the Distil workflow, [run 42441559779](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42441559779), on `main` at commit `b5d86974e7c789523b46df8a8184f768c06b212c` (version 0.5.0). The runner's screen is 1024×768, so the window is close to its minimum size. The demonstration data is synthetic.</sub>
+</details>
+
+<sub>**Screenshot provenance:**
+- Source: Distil workflow [run 42444109110](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42444109110) on `main` at commit `4b0b30bd8f600a59b5a0816f8e75c5a48cc4ec30`, which includes the latest Distil code change (`daf6daa`, PR #11).
+- Captured on 8 November 2026 (about 03:48 UTC). The app is version 0.5.0, and its Build card shows `4b0b30b`.
+- The runner's screen is 1024×768, so the window is close to its minimum size.
+- The images are unedited copies of the CI artifact.</sub>
+
+**Packaged builds** for the competition go in [`submissions/Distil/`](../submissions/Distil/README.md). That folder says whether a build has been uploaded and what was verified.
 
 ## Build and launch the latest Distil
 

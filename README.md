@@ -12,6 +12,10 @@ Programs made during Oslo Sprint 2026. Each product is self-contained in its own
 
 All names are working names.
 
+## Submissions
+
+Packaged competition builds go in [`submissions/`](submissions/README.md), one folder per product ([Distil](submissions/Distil/README.md), [Relay](submissions/Relay/README.md), [Presentation Studio](submissions/Presentation%20Studio/README.md)) and per operating system. Each folder says whether a build has been uploaded and what was verified. A folder existing does not mean that platform is supported.
+
 ## Requirements
 
 - macOS 14 or later and Xcode 15 or later (Swift 5.9+) for the macOS apps.

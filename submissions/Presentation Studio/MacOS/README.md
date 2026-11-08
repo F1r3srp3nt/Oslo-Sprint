@@ -1,6 +1,20 @@
-# Presentation Studio for macOS (Apple Silicon)
+# Presentation Studio: macOS
 
-Presentation Studio is a desktop app that turns your images and a brief into an editable PowerPoint deck. It is a standalone Electron app. Double-click it in Finder and it opens its own window. It needs no Terminal, browser tab, development server or separate Node/npm install. Source: [`presentation-studio/`](../../../presentation-studio/).
+No build uploaded yet.
+
+A macOS (Apple Silicon) build exists, but it is **not in this folder**. Its ZIP is 117 MB, and GitHub rejects files over 100 MB in a normal push (see [Adding a build](../../README.md#adding-a-build)). You can get the build in two ways:
+- the `desktop-macos` job of the [Presentation Studio workflow](../../../.github/workflows/presentation-studio.yml) uploads the `.app` ZIP and DMG as the run artifact `presentation-studio-macos`;
+- build it yourself with the commands under [Build it yourself](#build-it-yourself).
+
+Build made in the development session, **not uploaded**:
+
+| File | Version | Architecture | Build date | Source commit | Verification status |
+|---|---|---|---|---|---|
+| `Presentation-Studio-0.1.0-mac-arm64.zip` (117 MB, SHA-256 `523ef8033843425c44702435fd75300a901d9101caf0fa4072af0cd522b733b8`) | 0.1.0 | arm64 | 2026-11-08 | `3209380` (built from this commit's app source just before it was committed) | Cross-built on Linux and ad-hoc signed with rcodesign; bundle structure checked. **Not launched on a Mac: not verified.** The same app packaged for Linux passed the 15-step end-to-end test. |
+
+That ZIP was made on Linux with `zip -y`, which keeps the framework symlinks. A build made on a Mac (`npm run desktop:dist:mac`, or the CI job) uses electron-builder's own ZIP and DMG.
+
+**About the app.** Presentation Studio is a desktop app that turns your images and a brief into an editable PowerPoint deck. It is a standalone Electron app. Double-click it in Finder and it opens its own window. It needs no Terminal, browser tab, development server or separate Node/npm install. Source: [`presentation-studio/`](../../../presentation-studio/).
 
 <img src="app-icon.png" width="96" alt="Presentation Studio icon: a cyan diamond on a midnight-navy rounded square">
 
@@ -134,3 +148,5 @@ A `desktop-linux` job repeats the Linux results above.
 ## HCG Executable Maker
 
 Maker cannot build this app yet: it recognises Electron projects but reports them as unsupported. See [EXECUTABLE-MAKER-HANDOFF.md](EXECUTABLE-MAKER-HANDOFF.md) for the evidence and the exact adapter changes Maker would need.
+
+Back to [Presentation Studio submissions](../README.md).
