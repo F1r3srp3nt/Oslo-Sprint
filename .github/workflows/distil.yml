@@ -5,11 +5,13 @@ on:
     paths:
       - "distil/**"
       - ".github/workflows/distil.yml"
+      - ".github/scripts/**"
   push:
     branches: [main]
     paths:
       - "distil/**"
       - ".github/workflows/distil.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -56,3 +58,28 @@ jobs:
         run: swift test
       - name: Build Distil.app bundle
         run: SKIP_TESTS=1 bash scripts/build-macos.sh
+      # Window captures of the built app, for checking the look without a Mac. Download them from the
+      # run's Artifacts. Not a test: a capture problem doesn't fail the job.
+      - name: Screenshots
+        continue-on-error: true
+        env:
+          WINDOW_ID: ${{ runner.temp }}/window-id
+        run: |
+          swiftc -O ../.github/scripts/window-id.swift -o "$WINDOW_ID"
+          mkdir -p screenshots
+          shot() { ../.github/scripts/app-screenshot.sh dist/Distil.app "screenshots/$1.png" "${@:2}"; }
+          shot 01-overview-empty-project
+          n=2
+          for section in overview workspace comparison library experiments settings; do
+            shot "$(printf %02d $n)-$section-demo" --screenshot-demo pastedNotes --screenshot-section "$section"
+            n=$((n + 1))
+          done
+          shot 08-workspace-demo-light --screenshot-demo pastedNotes --screenshot-section workspace -appearance Light
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distil-screenshots
+          path: distil/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
