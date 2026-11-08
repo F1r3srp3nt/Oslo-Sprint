@@ -207,19 +207,19 @@ Authentication uses the `xi-api-key` header. Sources: [authentication](https://e
   - single instance;
   - quit stops the backend and leaves no processes.
 
-  The macOS bundle was cross-built and ad-hoc signed on Linux; it was **not launched on a Mac**. See [`submissions/Presentation Studio/MacOS/`](../submissions/Presentation%20Studio/MacOS/README.md#verification).
+  The same test passed **15/15 on macOS 15.8 (Apple Silicon)** in CI against the Mac build ([run 42483506768](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42483506768)), with keys in the macOS Keychain. There, Apple's `codesign --verify --deep --strict` and `hdiutil verify` also passed, and the app launched through LaunchServices and stayed up with no crash report. See [`submissions/Presentation Studio/MacOS/`](../submissions/Presentation%20Studio/MacOS/README.md#verification).
 
 **CI:** [`.github/workflows/presentation-studio.yml`](../.github/workflows/presentation-studio.yml) runs on every pull request and push to `main` that touches `presentation-studio/`. One job runs the secret check, type-check, unit/API tests and build. A second job runs the browser end-to-end test with Chromium, python-pptx and LibreOffice, and uploads the screenshots and exported files as an artifact. Two desktop jobs follow:
 - `desktop-linux` packages the app and runs `test:desktop` with and without a keyring.
 - `desktop-macos` builds the `.app`, ZIP and DMG on a macOS 15 Apple Silicon runner. It verifies the signature, launches the app through LaunchServices, runs `test:desktop` against it and captures a window screenshot.
 
-The desktop jobs were added with the desktop app and have **not run yet**. CI uses only the mock providers: it has no keys and makes no paid calls.
+Both desktop jobs pass. CI uses only the mock providers: it has no keys and makes no paid calls.
 
 **Not verified:**
 
 - **Real Anthropic and ElevenLabs calls.** No real keys were available, so all provider traffic was tested against local mock servers that follow the documented request and response shapes. Model output quality, real prompt-injection resistance, real error bodies, and the exact permission names in the ElevenLabs key dashboard have not been checked.
 - **Microsoft PowerPoint and Keynote.** The `.pptx` has only been opened with python-pptx and LibreOffice. Font metrics in PowerPoint can differ slightly from the preview.
-- **The desktop app on a real Mac:** Finder launch, Gatekeeper with the ad-hoc signature, Keychain, the microphone prompt, native menus and the DMG. These need a Mac; see the `desktop-macos` CI job.
+- **A person using the desktop app on a Mac:** Gatekeeper's prompt for a downloaded copy, the microphone prompt, and the menus and dialogs used by hand. The automated macOS checks above pass.
 - Real microphones, Safari and Firefox recording formats, and browsers other than Chromium.
 - Very large decks or images (performance), and accessibility with a screen reader.
 

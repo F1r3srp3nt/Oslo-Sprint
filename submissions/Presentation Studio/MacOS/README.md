@@ -2,17 +2,18 @@
 
 No build uploaded yet.
 
-A macOS (Apple Silicon) build exists, but it is **not in this folder**. Its ZIP is 117 MB, and GitHub rejects files over 100 MB in a normal push (see [Adding a build](../../README.md#adding-a-build)). You can get the build in two ways:
-- the `desktop-macos` job of the [Presentation Studio workflow](../../../.github/workflows/presentation-studio.yml) uploads the `.app` ZIP and DMG as the run artifact `presentation-studio-macos`;
-- build it yourself with the commands under [Build it yourself](#build-it-yourself).
+macOS (Apple Silicon) builds exist, but none is **in this folder**: the ZIP (about 118 MB) and the DMG (about 122 MB) are both larger than the 100 MB GitHub accepts in a normal push (see [Adding a build](../../README.md#adding-a-build)). You can get them in two ways:
+- **CI artifact:** the `desktop-macos` job of the [Presentation Studio workflow](../../../.github/workflows/presentation-studio.yml) uploads the `.app` ZIP, the DMG, screenshots and test results as the artifact `presentation-studio-macos`. Artifacts are kept for 14 days.
+- **Build it yourself** with the commands under [Build it yourself](#build-it-yourself).
 
-Build made in the development session, **not uploaded**:
+Builds and their status (**not uploaded here**):
 
 | File | Version | Architecture | Build date | Source commit | Verification status |
 |---|---|---|---|---|---|
-| `Presentation-Studio-0.1.0-mac-arm64.zip` (117 MB, SHA-256 `523ef8033843425c44702435fd75300a901d9101caf0fa4072af0cd522b733b8`) | 0.1.0 | arm64 | 2026-11-08 | `3209380` (built from this commit's app source just before it was committed) | Cross-built on Linux and ad-hoc signed with rcodesign; bundle structure checked. **Not launched on a Mac: not verified.** The same app packaged for Linux passed the 15-step end-to-end test. |
+| `Presentation-Studio-0.1.0-mac-arm64.zip` and `Presentation-Studio-0.1.0-arm64.dmg` from the CI artifact of [run 42483506768](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42483506768) | 0.1.0 | arm64 | 2026-11-08 | `7502a0b` | Built and ad-hoc signed on macOS 15.8 (Apple Silicon, GitHub Actions). `codesign --verify --deep --strict` passed, `hdiutil verify` passed, and the ZIP tested intact. Launched with `open` (LaunchServices) and still running after 10 s with no crash report; no processes left afterwards. Packaged-app end-to-end test passed 15/15, including the macOS Keychain. |
+| `Presentation-Studio-0.1.0-mac-arm64.zip` cross-built in the development session (SHA-256 `523ef8033843425c44702435fd75300a901d9101caf0fa4072af0cd522b733b8`) | 0.1.0 | arm64 | 2026-11-08 | `3209380` | Cross-built on Linux and ad-hoc signed with rcodesign; bundle structure checked. **Not launched on a Mac: not verified.** It predates the minimum-window-size layout fix (`7502a0b`). Prefer the CI build. |
 
-That ZIP was made on Linux with `zip -y`, which keeps the framework symlinks. A build made on a Mac (`npm run desktop:dist:mac`, or the CI job) uses electron-builder's own ZIP and DMG.
+The Linux-built ZIP was made with `zip -y`, which keeps the framework symlinks. Builds made on a Mac (`npm run desktop:dist:mac`, or the CI job) use electron-builder's own ZIP and DMG.
 
 **About the app.** Presentation Studio is a desktop app that turns your images and a brief into an editable PowerPoint deck. It is a standalone Electron app. Double-click it in Finder and it opens its own window. It needs no Terminal, browser tab, development server or separate Node/npm install. Source: [`presentation-studio/`](../../../presentation-studio/).
 
@@ -22,10 +23,11 @@ That ZIP was made on Linux with `zip -y`, which keeps the framework symlinks. A 
 
 | | Result |
 |---|---|
-| macOS arm64 `.app` and ZIP built | **Yes**, cross-built on Linux and ad-hoc signed with rcodesign (details below). |
-| Same app packaged and tested end to end | **Yes**, on Linux: 15/15 checks, twice (with and without a secure key store). |
-| Launched on a real Mac | **No.** No Mac was available in this environment. The macOS CI job that does this is written but **has not run** (the work is committed, not pushed). |
-| DMG | **Not built here.** DMGs need macOS (`hdiutil`). `npm run desktop:dist:mac` on a Mac, or the CI job, builds it. |
+| macOS arm64 `.app`, ZIP and DMG built and signed | **Yes**, on macOS 15.8 Apple Silicon in CI ([run 42483506768](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42483506768)). Apple's `codesign --verify --deep --strict` passed and `hdiutil verify` passed. |
+| Launched on a real Mac | **Yes**, in CI: opened with `open` (LaunchServices, as Finder does), still running after 10 s with no crash report, and no processes left afterwards. |
+| Packaged app tested end to end on macOS | **Yes**: 15/15 checks in CI, including keys stored in the macOS Keychain and a layout check at the 1100×700 minimum window size. |
+| Same test on Linux | **Yes**: 15/15, both locally and in CI, with and without a secure key store. |
+| Checked by a person on a Mac | **No.** No one has yet double-clicked a *downloaded* copy in Finder (Gatekeeper's quarantine prompt), answered the microphone prompt, or used the menus by hand. |
 
 ## Install and launch
 
@@ -95,7 +97,21 @@ The build artifacts are not committed (the ZIP is 117 MB). This session's build 
 
 ## Verification
 
-### Verified in this environment (Linux container, Electron 45.2.3, Xvfb)
+### Verified on macOS (GitHub Actions `desktop-macos`, macOS 15.8, Apple Silicon)
+
+[Run 42483506768](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42483506768) at `7502a0b`. Every step of the job passed:
+1. `npm run desktop:dist:mac` built `Presentation Studio.app`, the ZIP and the DMG, ad-hoc signed by electron-builder with Apple's `codesign`.
+2. `codesign --verify --deep --strict --verbose=2`: "valid on disk" and "satisfies its Designated Requirement", with every helper app validated.
+3. The Info.plist shows `com.oslosprint.presentationstudio`, 0.1.0, `LSMinimumSystemVersion` 12.0 and the microphone usage text. `lipo` reports arm64.
+4. The DMG checksum is **VALID** (`hdiutil verify`). The ZIP shows "No errors detected" (`unzip -t`).
+5. The repository's `launch-check.sh` (also used for Distil and Relay) opened the app through LaunchServices: "PASS: Presentation Studio launched with open and was still running after 10 s; no crash report."
+6. No `Presentation Studio.app` processes remained afterwards.
+7. `npm run test:desktop` against the Mac build passed **15/15**. The checks are listed below. Key storage was the macOS Keychain, keys survived a restart encrypted, and the layout check passed at 1100×700 (no sideways overflow; title field 210 px).
+8. A native window screenshot was captured with the title bar. It is in the run's artifact, not in this folder: this development session's network policy blocks the storage host that serves that run's artifacts.
+
+An earlier run on `4acf9cb` passed the same steps. Its screenshots showed the top bar's title field collapsed and the slide list overflowing at the 1100×700 minimum window size, which `7502a0b` fixed and now tests.
+
+### Verified in the development environment (Linux container, Electron 45.2.3, Xvfb)
 
 The packaged app (electron-builder `--dir`, with the same `app.asar` and fuses as the Mac build) was driven by `e2e/desktop-e2e.mjs`: **15/15 passed** without a secure key store, and **15/15 passed** with a Secret Service keyring.
 
@@ -122,19 +138,21 @@ Also verified here:
 - The `app.asar` contains only the bundles (no `node_modules`, no source, no keys).
 - The ZIP keeps symlinks.
 
-Screenshots in [`screenshots/`](screenshots/) are from the **Linux** packaged build of the same app. The window contents are identical on macOS; only the window frame differs.
+Screenshots in [`screenshots/`](screenshots/) are from the **Linux** packaged build of the same app, captured before the minimum-window-size fix at a larger window. The window contents are the same on macOS; only the window frame differs. Native macOS captures are in the CI artifact (see above).
 
-### Blocked by the environment (not verified)
+### Still not verified
 
-- **Launching on macOS.** That covers Gatekeeper behaviour of the ad-hoc signature from rcodesign, the Keychain prompt and storage, the microphone permission prompt, native menus and dialogs, and Finder double-click. rcodesign's own `verify` command is marked by its authors as unreliable and errors on ad-hoc signatures, so `codesign --verify --deep --strict` on a Mac is still needed.
-- **DMG** (needs macOS).
-- **macOS screenshots** (need a Mac).
+- **A person using the app on a Mac:**
+  - Gatekeeper's prompt when opening a *downloaded* (quarantined) copy (CI opened a locally built copy);
+  - the microphone permission prompt;
+  - native menus and dialogs used by hand (the test answers dialogs programmatically).
+- **The Linux-cross-built ZIP** from the development session on a Mac. The CI-built ZIP and DMG were checked instead.
 - **Real Anthropic and ElevenLabs calls** (no keys; tested against mock servers).
 - **Opening the export in Microsoft PowerPoint.**
 
-### How to close the gap
+### What the macOS CI job does
 
-Push the branch. The `desktop-macos` job in `.github/workflows/presentation-studio.yml` runs on a macOS 15 Apple Silicon runner. It:
+The `desktop-macos` job in `.github/workflows/presentation-studio.yml` runs on every pull request and push to `main` that touches `presentation-studio/`, on a macOS 15 Apple Silicon runner. It:
 1. builds the `.app`, ZIP and DMG with Apple's `codesign`;
 2. checks them with `codesign --verify --deep --strict`, `plutil`, `lipo`, `hdiutil verify` and `unzip -t`;
 3. opens the app through LaunchServices with `open`, as Finder does, using the repository's existing `launch-check.sh`, and checks that it stays up with no crash report;
