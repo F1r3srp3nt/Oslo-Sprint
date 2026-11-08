@@ -9,7 +9,9 @@ var targets: [Target] = [
     .testTarget(name: "TokenLabCoreTests", dependencies: ["TokenLabCore"])
 ]
 #if os(macOS)
-products.append(.executable(name: "TokenLab", targets: ["TokenLabApp"]))
+// The executable is named Distil so the menu bar, Dock and `swift run Distil` show the product name.
+// Package, module and bundle identifiers are unchanged.
+products.append(.executable(name: "Distil", targets: ["TokenLabApp"]))
 targets.append(.executableTarget(name: "TokenLabApp", dependencies: ["TokenLabCore"]))
 #endif
 

@@ -52,11 +52,11 @@ struct WybeRunnerView: View {
             if model.wybeRunning {
                 ProgressView().controlSize(.small)
                 Button(role: .destructive) { model.stopSimulation() } label: { Label("Stop", systemImage: "stop.fill") }
-                    .buttonStyle(.borderedProminent).tint(Theme.danger)
+                    .buttonStyle(DSPrimaryButtonStyle(tone: .danger))
                     .keyboardShortcut(".", modifiers: .command)
             } else {
                 Button { model.startSimulation() } label: { Label("Run simulation", systemImage: "play.fill") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
             }
         }
     }

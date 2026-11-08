@@ -93,13 +93,17 @@ final class EvaluationTests: XCTestCase {
     func testProviderUsageIsSeparateFromEstimates() throws {
         var project = try sampleWithExperiment()
         let experiment = project.experiments[0]
-        let provider = try XCTUnwrap(experiment.evaluation.providerReportedInputReduction)
-        XCTAssertEqual(provider.tokens, 100)
-        XCTAssertEqual(provider.percent ?? 0, 100.0 / 3.0, accuracy: 0.0001)
-        XCTAssertNotEqual(provider.tokens, experiment.snapshot.estimatedReduction, "Estimates and provider usage are independent numbers")
+        guard case .comparable(let provider, let model, let full, let selected) = experiment.evaluation.providerInputComparison else {
+            return XCTFail("Matching labels and both counts should be comparable")
+        }
+        XCTAssertEqual([provider, model], ["Manual", "test-model"])
+        XCTAssertEqual(full - selected, 100)
+        XCTAssertNotEqual(full - selected, experiment.snapshot.estimatedReduction, "Estimates and provider usage are independent numbers")
 
         project.experiments[0].evaluation.selectedContextRun.usage.inputTokens = nil
-        XCTAssertNil(project.experiments[0].evaluation.providerReportedInputReduction, "No provider reduction without both measurements")
+        guard case .unavailable = project.experiments[0].evaluation.providerInputComparison else {
+            return XCTFail("No provider comparison without both measurements")
+        }
     }
 
     func testCheckTallies() throws {

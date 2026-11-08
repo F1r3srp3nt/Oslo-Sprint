@@ -22,6 +22,10 @@ import TokenLabCore
 @main struct TokenLabApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = AppStore()
+
+    init() {
+        PreferenceMigration.run()
+    }
     @AppStorage(StoredPreference.appearance) private var appearance = "System"
 
     var body: some Scene {

@@ -102,7 +102,7 @@ struct TrainingView: View {
     private func controls(_ snapshot: TrainingSnapshot) -> some View {
         HStack(spacing: 10) {
             if snapshot.current == nil {
-                Button("Start training") { model.send("start", source: .control) }.buttonStyle(.borderedProminent)
+                Button("Start training") { model.send("start", source: .control) }.buttonStyle(.dsPrimary)
             } else {
                 Button { model.send("back", source: .control) } label: { Label("Back", systemImage: "chevron.left") }
                 Button { model.send("repeat", source: .control) } label: { Label("Repeat", systemImage: "arrow.counterclockwise") }
@@ -110,11 +110,10 @@ struct TrainingView: View {
                     Button { model.send("understood", source: .control) } label: {
                         Label("I understand the safety warning", systemImage: "checkmark.shield")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.warning)
+                    .buttonStyle(DSPrimaryButtonStyle(tone: .warning))
                 }
                 Button { model.send("next", source: .control) } label: { Label("Next", systemImage: "chevron.right") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
                     .disabled(snapshot.pendingAcknowledgement)
                 if model.voice.canSpeak, let step = snapshot.current {
                     Button { model.speak(ProcedureRenderer.plainText(step)) } label: { Label("Read aloud", systemImage: "speaker.wave.2") }

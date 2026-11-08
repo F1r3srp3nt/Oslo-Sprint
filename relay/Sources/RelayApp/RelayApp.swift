@@ -59,26 +59,47 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selection: AppSection? = .assistant
+    @State private var selection: AppSection = .assistant
 
     var body: some View {
-        NavigationSplitView {
-            List(AppSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .badge(badge(for: section))
+        // A persistent split view (not an adaptive NavigationSplitView), so the sidebar never
+        // collapses when a section needs more width. The window controls stay native.
+        HSplitView {
+            DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
+                      selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
+                sidebarFooter
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220)
-            .safeAreaInset(edge: .bottom) { sidebarFooter }
-        } detail: {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-                detail
-            }
+            .frame(minWidth: 200, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+            detail
+                .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
         }
+        .background(DSBackground())
+        .groupBoxStyle(DSPanelGroupBoxStyle())
         .alert("Relay", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
             Button("OK", role: .cancel) { model.notice = nil }
         } message: {
             Text(model.notice ?? "")
+        }
+    }
+
+    private func item(_ section: AppSection) -> DSSidebarItem<AppSection> {
+        let count = badge(for: section)
+        let meaning: String
+        switch section {
+        case .tasks: meaning = "\(count) need attention"
+        case .wybe: meaning = "simulation running"
+        default: meaning = "\(count)"
+        }
+        return DSSidebarItem(id: section, title: section.title, symbol: section.symbol, badge: count, badgeDescription: meaning)
+    }
+
+    private var speechSymbol: String {
+        switch speechTone {
+        case .success: return "checkmark.circle"
+        case .danger: return "exclamationmark.triangle"
+        case .neutral: return "keyboard"
+        default: return "circle.dashed"
         }
     }
 
@@ -91,7 +112,7 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var detail: some View {
-        switch selection ?? .assistant {
+        switch selection {
         case .assistant: AssistantView()
         case .tasks: TasksView()
         case .training: TrainingView()
@@ -102,21 +123,22 @@ struct ContentView: View {
     }
 
     private var sidebarFooter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Divider()
-            HStack(spacing: 6) {
-                Circle().fill(Theme.color(model.readiness)).frame(width: 7, height: 7)
-                Text(model.readiness.summary).font(.caption).foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-            }
-            if model.wybeRunning {
-                HStack(spacing: 6) {
-                    Circle().fill(Theme.simulation).frame(width: 7, height: 7)
-                    Text("Wybe simulation running").font(.caption).foregroundStyle(Theme.textSecondary)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
+        DSStatusCard(rows: [
+            DSStatusRow(label: "Speech", value: model.readiness.summary, systemImage: speechSymbol, tone: speechTone),
+            DSStatusRow(label: "Wybe runner", value: model.wybeRunning ? "Simulation running" : "Idle · simulation only",
+                        systemImage: "testtube.2", tone: model.wybeRunning ? .simulation : .neutral),
+            DSStatusRow(label: "Reasoning", value: model.reasonerName.isEmpty ? "Built-in rules" : model.reasonerName,
+                        systemImage: "list.bullet.indent", tone: .neutral)
+        ])
+        .padding(DS.Space.s)
+    }
+
+    /// Derived from the separate readiness checks: a saved key alone never reads as "connected".
+    private var speechTone: DSTone {
+        let r = model.readiness
+        if !r.keySaved { return .neutral }
+        if r.speechInput.problem != nil || r.speechOutput.problem != nil { return .danger }
+        if r.speechInput.isPassed && (r.speechOutput.isPassed || !r.voiceIDSet) { return .success }
+        return .warning
     }
 }
