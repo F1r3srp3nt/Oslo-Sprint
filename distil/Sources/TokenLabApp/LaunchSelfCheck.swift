@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// `--self-check <report.json>`: used by scripts/verify-launch.sh and CI to confirm that the packaged
+/// `--self-check <report.json>`: used by CI (.github/scripts/self-check.sh) to confirm that the packaged
 /// app really started. About three seconds after launch it writes what the running process sees
 /// (bundle identity, Info.plist values, visible windows, bundled resources) to the given file, then
 /// quits. It reads nothing else and changes nothing. Ordinary launches never pass the option.

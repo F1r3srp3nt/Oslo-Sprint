@@ -2,7 +2,7 @@
 # macOS build verification for Relay. Writes everything to build/verify-macos.log.
 #
 #   ./scripts/verify-macos.sh                 # prerequisites, tests, Relay.app bundle (each reported separately)
-#   ./scripts/verify-macos.sh --launch-check  # also opens Relay.app with --self-check to confirm it starts, then it quits
+#   ./scripts/verify-macos.sh --launch-check  # also opens Relay.app to confirm it starts and reports what it loaded
 #
 # It never reads the Keychain, never prints credentials and makes no ElevenLabs requests
 # (Relay makes none at launch; speech tests only run from buttons in the app).
@@ -34,9 +34,6 @@ run() {
   local status=$?
   if [[ $status -eq 0 ]]; then
     SUMMARY+=("PASS  $label")
-  elif [[ $status -eq 3 ]]; then
-    SUMMARY+=("NOT RUN  $label (a prerequisite is missing; see the log)")
-    FAILED=1
   else
     SUMMARY+=("FAIL  $label (exit $status)")
     FAILED=1
@@ -56,12 +53,13 @@ section "Environment"
   echo "uncommitted changes under relay/:"; git status --short -- . 2>&1
 } >> "$LOG" 2>&1
 
-run "Prerequisites for packaging (scripts/check-prerequisites.sh)" scripts/check-prerequisites.sh package
-run "Tests (scripts/test.sh: source build, test compilation, test run)" scripts/test.sh
-run "Packaging (scripts/package.sh: release Relay.app, no tests)" scripts/package.sh
+run "Prerequisites for building and testing (scripts/check-prereqs.sh --tests)" bash scripts/check-prereqs.sh --tests
+run "Tests (scripts/test.sh: source build, test compilation, test run)" bash scripts/test.sh
+run "Packaging (scripts/build-app.sh: release Relay.app, no tests)" bash scripts/build-app.sh
 
 if [[ $LAUNCH_CHECK -eq 1 && -d build/Relay.app ]]; then
-  run "Launch verification (scripts/verify-launch.sh)" scripts/verify-launch.sh
+  run "Launch check (process starts and keeps running)" bash ../.github/scripts/launch-check.sh build/Relay.app 8
+  run "Self-check (the running app reports its bundle, commit and windows)" bash ../.github/scripts/self-check.sh build/Relay.app
 elif [[ $LAUNCH_CHECK -eq 0 ]]; then
   SUMMARY+=("SKIP  Launch verification (run with --launch-check)")
 else

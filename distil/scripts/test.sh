@@ -1,71 +1,68 @@
-#!/usr/bin/env bash
-# Builds and tests the package, in separate stages so a failure says what failed:
-#   1. prerequisites      scripts/check-prerequisites.sh test (stops with exact fixes; changes nothing)
-#   2. source build       swift build                 (the core library and, on macOS, the app target)
-#   3. test compilation   swift build --build-tests   (the test targets; needs XCTest, i.e. full Xcode)
-#   4. test run           swift test --skip-build
-# Works on macOS and Linux. Never packages or launches the app (that is scripts/package.sh).
-# Full output: dist/logs/test.log. Exit status: 0 passed, 1 tests failed, 2 a build failed,
-# 3 tests not run because a prerequisite is missing.
+#!/bin/bash
+# Runs Distil's test suite (TokenLabCoreTests) in three stages: source build (on macOS this includes the app
+# target), test compilation, test run. Testing only: it never packages or launches the app.
+# Exit status: 0 pass, 1 tests failed or did not complete, 2 a build stage failed (tests not run).
+# Works from any directory, on macOS (needs Xcode's XCTest) and on Linux.
+#
+# Usage: bash distil/scripts/test.sh
+#        TOKENLAB_ENCODINGS_DIR=/folder/with/tiktoken/files bash distil/scripts/test.sh   # also the 3 tokenizer tests
 set -uo pipefail
-cd "$(dirname "$0")/.."
-LOG_DIR="dist/logs"
-mkdir -p "$LOG_DIR"
-LOG="$PWD/$LOG_DIR/test.log"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT" || exit 1
+
+bash "$ROOT/scripts/check-prereqs.sh" --tests || exit 1
+
+mkdir -p "$ROOT/.build"
+LOG="$ROOT/.build/test.log"
 : > "$LOG"
-
-stage() { printf '\n== %s ==\n' "$1" | tee -a "$LOG"; }
-
-# run <command...>: shows and logs the output, returns the command's exit status.
-run() { echo "\$ $*" >> "$LOG"; "$@" 2>&1 | tee -a "$LOG"; return "${PIPESTATUS[0]}"; }
-
-errors_from_log() { grep -E '(error|fatal error):' "$LOG" | grep -v '^\$' | sort -u | head -10 | sed 's/^/    /'; }
-
-stage "1/4 Prerequisites"
-if ! run scripts/check-prerequisites.sh test; then
+# Three stages, so a failure says what failed: the package's own sources, the test targets, or the tests.
+run_stage() {
+  local label="$1"; shift
+  echo "== $label: $* =="
+  echo "\$ $*" >> "$LOG"
+  "$@" 2>&1 | tee -a "$LOG"
+  return "${PIPESTATUS[0]}"
+}
+first_errors() { grep -E '(error|fatal error):' "$LOG" | sort -u | head -10 | sed 's/^/    /'; }
+echo "Full output also in $LOG"
+if ! run_stage "1/3 Source build" swift build; then
   echo
-  echo "RESULT: tests NOT RUN. A prerequisite is missing (see the fixes above). Nothing was compiled."
-  exit 3
-fi
-
-stage "2/4 Source build (swift build)"
-if ! run swift build; then
-  echo
-  echo "RESULT: tests NOT RUN. The package's own sources failed to compile (not the tests, not a crash):"
-  errors_from_log
-  echo "Full log: $LOG"
+  echo "Tests did NOT run: the package's own sources failed to compile (libraries or app, not the tests)."
+  echo "Nothing was launched, so this is not an app crash. First errors:"
+  first_errors
+  echo "Result: FAIL (source build)"
   exit 2
 fi
-
-stage "3/4 Test compilation (swift build --build-tests)"
-if ! run swift build --build-tests; then
+if ! run_stage "2/3 Test compilation" swift build --build-tests; then
   echo
-  echo "RESULT: tests NOT RUN. The test targets failed to compile. The app was not run, so this is not an app crash:"
-  errors_from_log
   if grep -q "no such module 'XCTest'" "$LOG"; then
-    echo "  XCTest is missing from the selected developer directory: run scripts/check-prerequisites.sh test for the fix."
+    echo "Tests did NOT run: the test targets could not be compiled because XCTest is missing from the selected"
+    echo "developer tools (usually Command Line Tools instead of Xcode). This is a toolchain problem, not an app crash."
+    echo "Run: bash $ROOT/scripts/check-prereqs.sh --tests   for the exact fix."
+  else
+    echo "Tests did NOT run: the test targets failed to compile. Nothing was launched, so this is not an app crash."
+    echo "First errors:"
+    first_errors
   fi
-  echo "Full log: $LOG"
+  echo "Result: FAIL (test compilation)"
   exit 2
 fi
-
-stage "4/4 Test run (swift test --skip-build)"
-run swift test --skip-build
+run_stage "3/3 Test run" swift test --skip-build
 status=$?
-summary="$(grep -E 'Executed [0-9]+ tests?' "$LOG" | tail -1 | sed -E 's/^[[:space:]]+//')"
+
 echo
-if [[ $status -eq 0 && -n "$summary" ]]; then
-  echo "RESULT: tests PASSED on $(uname -s). $summary"
-  exit 0
-fi
-if [[ -z "$summary" ]]; then
-  echo "RESULT: tests DID NOT COMPLETE (exit $status). The test process stopped before reporting a summary,"
-  echo "for example a crash inside a test. Last lines:"
-  tail -15 "$LOG" | sed 's/^/    /'
+summary="$(grep -E 'Executed [0-9]+ tests?, with' "$LOG" | tail -1)"
+if [[ -n "$summary" ]]; then
+  run="$(sed -nE 's/.*Executed ([0-9]+) tests?.*/\1/p' <<<"$summary")"
+  skipped="$(sed -nE 's/.* with ([0-9]+) tests? skipped.*/\1/p' <<<"$summary")"
+  failed="$(sed -nE 's/.* and ([0-9]+) failures?.*/\1/p; s/.*, with ([0-9]+) failures?.*/\1/p' <<<"$summary" | head -1)"
+  echo "Tests: ${run} run, ${skipped:-0} skipped, ${failed:-?} failed."
+  [[ "${skipped:-0}" != 0 ]] && echo "Skipped tests need the official tokenizer files (see README: TOKENLAB_ENCODINGS_DIR)."
 else
-  echo "RESULT: tests FAILED (exit $status). $summary"
-  echo "Failing tests:"
-  grep -E "Test Case .*(failed|crashed)" "$LOG" | sort -u | sed 's/^/    /'
+  echo "Tests did NOT run to completion (swift test exited with status $status before reporting results,"
+  echo "for example because a test crashed)."
+  echo "See the first 'error:' lines in $LOG."
 fi
-echo "Full log: $LOG"
-exit 1
+
+if [[ $status -eq 0 ]]; then echo "Result: PASS"; else echo "Result: FAIL (swift test exit status $status)"; fi
+exit $status

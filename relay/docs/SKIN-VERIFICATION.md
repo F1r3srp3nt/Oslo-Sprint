@@ -11,11 +11,11 @@ From the root of your `Oslo-Sprint` clone, on the branch that contains the skin:
 cd "$(git rev-parse --show-toplevel)"
 
 # Distil → distil/dist/Distil.app
-(cd distil && scripts/package.sh)
+bash distil/scripts/build-macos.sh   # packaging only; never runs tests
 open "$(git rev-parse --show-toplevel)/distil/dist/Distil.app"
 
 # Relay → relay/build/Relay.app
-(cd relay && scripts/package.sh)
+(cd relay && ./scripts/build-app.sh)
 open "$(git rev-parse --show-toplevel)/relay/build/Relay.app"
 ```
 

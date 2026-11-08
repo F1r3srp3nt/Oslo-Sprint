@@ -14,12 +14,13 @@ cd relay
 
 This writes `relay/build/verify-macos.log` with toolchain versions and the output of each stage,
 each reported separately:
-- the prerequisite check;
+- the prerequisite check (`scripts/check-prereqs.sh --tests`);
 - `scripts/test.sh`: source build, test compilation, test run;
-- `scripts/package.sh`: `Relay.app`, signature and Info.plist checks;
-- `scripts/verify-launch.sh`: the packaged app opens with `--self-check` and reports what it loaded.
+- `scripts/build-app.sh`: `Relay.app`, signature and Info.plist checks;
+- the launch check: the app keeps running, and with `--self-check` it reports the bundle, commit and
+  windows it loaded.
 
-Tests that could not run are reported as NOT RUN, not as a failure of the app. The log contains no
+A failure to compile the tests is reported as such, not as a failure of the app. The log contains no
 keys. **Send that file back.** If a stage fails, its compiler errors are in the log.
 
 ## B. Guided setup (manual, in the app)

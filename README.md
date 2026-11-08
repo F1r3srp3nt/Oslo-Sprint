@@ -19,31 +19,47 @@ Both names are working names.
 
 ## Build and test
 
-**Distil**
+Each command works from any folder, and on a Mac each one starts by checking the developer tools. Testing and packaging are separate: packaging never compiles the test targets.
+
+**1. Check this Mac** (read-only; it prints the exact fix for anything missing and never changes your developer-tool selection):
 
 ```sh
-cd distil
-scripts/check-prerequisites.sh test  # what this Mac has and lacks; changes nothing
-scripts/run-latest.sh            # package dist/Distil.app, quit any running copy, open the new one
-scripts/test.sh                  # build, compile the tests, run them (tests need full Xcode)
-swift run Distil                 # run from SwiftPM (macOS)
+bash distil/scripts/check-prereqs.sh --tests
+bash relay/scripts/check-prereqs.sh --tests
 ```
 
-In Xcode, open `distil/Package.swift` and run the **Distil** scheme. The internal package and module names are still `TokenLab*`; the bundle identifier is unchanged.
-
-**Relay**
+**2. Build and open the apps** (each packages a fresh, ad-hoc-signed bundle, quits a running copy, and opens exactly the new one only if every step succeeded; add `--test` to run the tests first):
 
 ```sh
-cd relay
-scripts/check-prerequisites.sh test  # what this Mac has and lacks; changes nothing
-scripts/run-latest.sh            # package build/Relay.app (microphone usage text included) and open it
-scripts/test.sh                  # build, compile the tests, run them (macOS or Linux)
-swift run relay-runner help      # headless runner (macOS or Linux)
+bash distil/scripts/run-latest.sh      # → distil/dist/Distil.app
+bash relay/scripts/run-latest.sh       # → relay/build/Relay.app
 ```
 
-Packaging (`scripts/package.sh`) never compiles the tests, and every script names the stage that
-failed. Commands, failure messages, bundle contents and CI artifacts: [`docs/BUILDING.md`](docs/BUILDING.md).
-For HCG Executable Maker: [`docs/MAKER-HANDOFF.md`](docs/MAKER-HANDOFF.md).
+**Separate steps**
+
+| | Distil | Relay |
+|---|---|---|
+| Tests (need full Xcode on a Mac; also run on Linux) | `bash distil/scripts/test.sh` | `bash relay/scripts/test.sh` |
+| Package only | `bash distil/scripts/build-macos.sh` | `bash relay/scripts/build-app.sh` |
+| Run from SwiftPM (no bundle) | `cd distil && swift run Distil` | `cd relay && swift run Relay` |
+| Headless runner | — | `cd relay && swift run relay-runner help` |
+
+In Xcode, open `distil/Package.swift` (scheme **Distil**) or `relay/Package.swift` (scheme **Relay**). Distil's package and modules keep their internal names (`TokenLab*`); its executable product is `Distil`. Both bundle identifiers are unchanged, so preferences and saved data carry over.
+
+**Troubleshooting**
+
+| Message | What failed | Fix |
+|---|---|---|
+| `no such module 'XCTest'` (often followed by `fatalError`) | Compiling the **tests**, not the app: the selected developer tools are the Command Line Tools, which usually lack XCTest | Run the check above. Use Xcode for that command (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash distil/scripts/test.sh`) or select it yourself (`sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`). Packaging works without it. |
+| `Tests did NOT run: the package's own sources failed to compile` | `scripts/test.sh` stage 1: a compile error in the app or a library. Nothing was launched | The first errors are printed; the full log is in `.build/test.log` |
+| `Tests did NOT run: the test targets failed to compile` | `scripts/test.sh` stage 2: a compile error in the tests. Nothing was launched | Same |
+| `no executable product named 'TokenLab'` | The command asked for an old product name | Distil's product is `Distil` (since 0.5); `TokenLab` is only the package name |
+| HCG Executable Maker shows **Unrecognized** | That Maker build predates its Swift support | See [`docs/EXECUTABLE-MAKER.md`](docs/EXECUTABLE-MAKER.md) |
+| The app opens but closes at once | A launch crash | `run-latest.sh` reports it; look in Console › Crash Reports |
+
+CI also opens each packaged app with `--self-check`: the running app reports its bundle identifier, the commit in its Info.plist and its visible windows, and the check fails if any of them is wrong (`.github/scripts/self-check.sh`). Ordinary launches never pass that option.
+
+Downloadable test builds of both apps (zipped `.app`, ad hoc signed, kept 14 days) are attached to each macOS CI run under *Artifacts*. They are not releases; macOS asks for confirmation the first time (Control-click › Open).
 
 Each product's README has full instructions, its verification status, its limitations and a first-launch checklist.
 
