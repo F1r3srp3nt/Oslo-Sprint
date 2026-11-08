@@ -113,9 +113,8 @@ struct ContentView: View {
     private var speechSymbol: String {
         switch speechTone {
         case .success: return "checkmark.circle"
-        case .danger: return "exclamationmark.triangle"
-        case .neutral: return "keyboard"
-        default: return "circle.dashed"
+        case .warning: return "exclamationmark.triangle"
+        default: return "keyboard"
         }
     }
 
@@ -150,12 +149,12 @@ struct ContentView: View {
         .padding(DS.Space.s)
     }
 
-    /// Derived from the separate readiness checks: a saved key alone never reads as "connected".
+    /// Same rules as `Theme.color(_: ElevenLabsReadiness)`, expressed as a tone for the status card.
     private var speechTone: DSTone {
-        let r = model.readiness
-        if !r.keySaved { return .neutral }
-        if r.speechInput.problem != nil || r.speechOutput.problem != nil { return .danger }
-        if r.speechInput.isPassed && (r.speechOutput.isPassed || !r.voiceIDSet) { return .success }
+        let readiness = model.readiness
+        if !readiness.keySaved { return .neutral }
+        if readiness.speechInput.problem != nil || readiness.speechOutput.problem != nil { return .warning }
+        if readiness.speechInput.isPassed && (readiness.speechOutput.isPassed || !readiness.voiceIDSet) { return .success }
         return .warning
     }
 }
