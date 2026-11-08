@@ -1,3 +1,5 @@
+![HCG × Oslo Sprint 2026 Submissions banner: Distil, Relay and Presentation Studio above the Oslo waterfront at night, with the platform categories macOS, Windows, Linux, Android and iOS](assets/submissions-banner.png)
+
 # Submissions
 
 Packaged builds of the three Oslo Sprint 2026 products, uploaded for the competition. Source code stays in each product's own folder; these folders hold packages only.
@@ -8,7 +10,7 @@ Packaged builds of the three Oslo Sprint 2026 products, uploaded for the competi
 | **Relay** | [`Relay/`](Relay/README.md) | [`relay/`](../relay/README.md) |
 | **Presentation Studio** | [`Presentation Studio/`](Presentation%20Studio/README.md) | [`presentation-studio/`](../presentation-studio/README.md) |
 
-Each product has one folder per operating system: `MacOS/`, `Windows/`, `Linux/`, `Android/` and `iOS/`. **A folder existing does not mean a build exists or that the platform is supported.** Every folder starts as "No build uploaded yet."
+Each product has one folder per operating system: `MacOS/`, `Windows/`, `Linux/`, `Android/` and `iOS/`. **A folder existing does not mean a build exists or that the platform is supported.** Likewise, the platform names in the banner are categories, not proof that builds exist. Every folder starts as "No build uploaded yet."
 
 ## Adding a build
 

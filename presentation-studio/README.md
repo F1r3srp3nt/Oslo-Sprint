@@ -4,7 +4,24 @@ An Oslo Sprint product (working name). You upload images and describe your topic
 
 Presentation Studio is a standalone web app: a React + TypeScript interface and a small Node/Express backend that holds the provider keys. It shares no code with Distil or Relay.
 
-![Editor: slide list, 16:9 preview and properties panel (synthetic sample content)](docs/screenshots/a2-editor.png)
+## Screenshots
+
+These are **browser screenshots**: Chromium driven by Playwright in the end-to-end test, not a packaged desktop app. All content is synthetic.
+
+**Slide editor**: slide list, 16:9 preview (the same layout as the PowerPoint export) and the properties panel, in template mode (no AI). The deck is a synthetic sample. *Captured 8 November 2026.*
+
+![Presentation Studio slide editor in a browser: slide list, 16:9 preview and properties panel, template mode with a synthetic bike-share sample](docs/screenshots/slide-editor.png)
+
+**Presentation mode**: full-screen preview with narration controls. The slide text comes from the test's **mock** AI provider, which labels it `[MOCK]`; no real model was called. *Captured 8 November 2026.*
+
+![Presentation Studio presentation mode in a browser: a mock-generated slide with a synthetic harbour illustration and narration controls](docs/screenshots/presentation-mode.png)
+
+<sub>**Screenshot provenance:**
+- Source: the `e2e` job of the Presentation Studio workflow, [run 42444090395](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42444090395), on `main` at commit `cf8c54b74aa7be18b4a606b8d40ebc80120d4e9e`, the latest Presentation Studio change.
+- Captured on 8 November 2026 (about 03:47 UTC) in headless Chromium at 1440×900.
+- The images are unedited copies of the CI artifact (`a2-editor.png`, `b4-present.png`).</sub>
+
+**Packaged builds** for the competition go in [`submissions/Presentation Studio/`](../submissions/Presentation%20Studio/README.md). Presentation Studio currently runs from source as a web app; that folder says whether any package has been uploaded.
 
 ## Quick start
 

@@ -12,16 +12,37 @@ dependencies, and does not use or touch `distil/` (Distil).
 
 ## Screenshots
 
+Real window captures of the packaged `Relay.app`, taken by the Relay workflow on GitHub's macOS runner, on a fresh install: no API key, no tasks and no simulation run.
+
+**Assistant**: suggested requests and the typed request field. Speech is optional; everything works by typing. *Captured 8 November 2026.*
+
+![Relay Assistant: suggested requests and the typed request field, with speech not configured](docs/screenshots/assistant.png)
+
+**Warehouse Training**: a synthetic Dock B procedure, one step at a time, in English, Norwegian Bokmål and Polish. *Captured 8 November 2026.*
+
+![Relay Warehouse Training: synthetic Dock B procedure with English, Norwegian Bokmål and Polish](docs/screenshots/warehouse-training.png)
+
+**Wybe Runner**: simulation controls, clearly marked SIMULATED. Live mode is unavailable. *Captured 8 November 2026.*
+
+![Relay Wybe Runner: simulation controls marked SIMULATED, live mode unavailable, empty action history](docs/screenshots/wybe-runner.png)
+
+<details>
+<summary>More screens: Settings in both appearances (same run)</summary>
+
 | | |
 |---|---|
-| ![Relay Assistant: suggested requests and the typed request field, with speech not configured](docs/screenshots/01-assistant.png) | ![Relay Warehouse Training: synthetic Dock B procedure with English, Norwegian Bokmål and Polish](docs/screenshots/03-training.png) |
-| **Assistant**: suggested requests; everything works by typing. | **Warehouse Training**: a synthetic procedure, one step at a time, in three languages. |
-| ![Relay Wybe Runner: simulation controls, clearly marked SIMULATED, with live mode unavailable](docs/screenshots/04-wybe.png) | ![Relay Settings: appearance and speech readiness, with no API key saved](docs/screenshots/06-settings.png) |
-| **Wybe Runner**: simulation only; live mode is unavailable. | **Settings**: appearance and speech readiness (no key saved). |
-| ![Relay Settings in the Light appearance](docs/screenshots/07-settings-light.png) | |
-| **Light** appearance, Settings. | |
+| ![Relay Settings: appearance and speech readiness, with no API key saved](docs/screenshots/settings.png) | ![Relay Settings in the Light appearance](docs/screenshots/settings-light.png) |
+| **Settings** (no key saved) | **Settings**, Light appearance |
 
-<sub>Captured automatically by the macOS job of the Relay workflow, [run 42441559881](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42441559881), on `main` at commit `b5d86974e7c789523b46df8a8184f768c06b212c` (version 0.2.0), on a fresh install: no API key, no tasks and no simulation run. The window is at its minimum size (980 points wide).</sub>
+</details>
+
+<sub>**Screenshot provenance:**
+- Source: Relay workflow [run 42444109030](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42444109030) on `main` at commit `4b0b30bd8f600a59b5a0816f8e75c5a48cc4ec30`, which includes the latest Relay code change (`daf6daa`, PR #11, with the Wybe Runner sidebar fix).
+- Captured on 8 November 2026 (about 03:49 UTC). The app is version 0.2.0, and its Build card shows `4b0b30b`.
+- The window is at its minimum size (980 points wide).
+- The images are unedited copies of the CI artifact.</sub>
+
+**Packaged builds** for the competition go in [`submissions/Relay/`](../submissions/Relay/README.md). That folder says whether a build has been uploaded and what was verified.
 
 ## Status of the first milestone
 
