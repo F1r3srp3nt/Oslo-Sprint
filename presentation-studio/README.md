@@ -51,6 +51,7 @@ Then open http://127.0.0.1:8787.
 | `npm run test:e2e` | Browser end-to-end test (Playwright + Chromium, mock providers) |
 | `npm run typecheck` | TypeScript only |
 | `npm run samples` | Regenerates the synthetic sample images in `samples/` |
+| `./scripts/check-no-secrets.sh` | Fails if a `.env` file or something that looks like a real API key is tracked by git |
 
 ## How it works
 
@@ -158,6 +159,8 @@ Authentication uses the `xi-api-key` header. Sources: [authentication](https://e
 - `npm test` runs 45 unit and API tests: layout bounds, text fit and overflow, fit/fill/crop geometry, template mode, outline validation, narration outdated detection, project round-trip (byte-identical images and audio), `.pptx` structure (slide size, text boxes, bullets, notes, unstretched images, crop), narration ZIP and mapping, every server route against **mock** Anthropic and ElevenLabs servers, ElevenLabs error mapping, and that keys are not logged.
 - `npm run test:e2e` runs 25 browser steps in two runs. **Run A** has no providers. It uploads PNG, JPEG and WebP images, then reorders, captions and removes images. It builds a template deck; edits text, notes, layout, fill, zoom and crop; adds, duplicates, deletes and reorders slides; checks the overflow warning; saves the project and reopens it in a fresh page; and exports a `.pptx`, which is checked with python-pptx and converted by LibreOffice. **Run B** uses **mock** providers. It checks "key configured" against "connection verified"; records a spoken brief through Chromium's fake microphone, then transcribes, edits and uses it; checks the AI disclosure, generation and progress; regenerates one slide; chooses and previews a voice; narrates after confirmation; checks outdated detection; checks the unavailable-voice error; narrates the whole deck; checks presentation mode playback, pause and navigation; checks the ZIP export; and checks that the keys appear nowhere in the browser, storage, files or logs.
 - Exported decks open in **python-pptx 1.0.2** and convert in **LibreOffice**, and the preview and the LibreOffice render match (screenshot above).
+
+**CI:** [`.github/workflows/presentation-studio.yml`](../.github/workflows/presentation-studio.yml) runs on every pull request and push to `main` that touches `presentation-studio/`. One job runs the secret check, type-check, unit/API tests and build. A second job runs the browser end-to-end test with Chromium, python-pptx and LibreOffice, and uploads the screenshots and exported files as an artifact. CI uses only the mock providers: it has no keys and makes no paid calls.
 
 **Not verified:**
 

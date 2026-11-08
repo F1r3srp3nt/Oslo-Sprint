@@ -77,7 +77,7 @@ Each product's README has full instructions, its verification status, its limita
 - **Linux:** the core libraries and tests of both products build and pass on Linux.
 - **macOS:** GitHub Actions also builds both macOS apps on a macOS 15 runner, launches them and saves window screenshots ([`.github/workflows/`](.github/workflows/)). The screenshots in each product README come from those runs.
 - **Not yet tested on a Mac:** interaction, speech, and accessibility have not been checked by a person on a Mac.
-- **Presentation Studio:** unit, API and browser end-to-end tests pass on Linux against mock providers. Real Anthropic and ElevenLabs calls, and opening exports in Microsoft PowerPoint, have not been verified yet.
+- **Presentation Studio:** unit, API and browser end-to-end tests pass on Linux against mock providers, and GitHub Actions runs them on every change to `presentation-studio/` ([`presentation-studio.yml`](.github/workflows/presentation-studio.yml)). Real Anthropic and ElevenLabs calls, and opening exports in Microsoft PowerPoint, have not been verified yet.
 
 See each product's README for details.
 
