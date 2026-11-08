@@ -21,23 +21,27 @@ A smaller prompt is not automatically a better prompt. Every number names the co
 
 ## Build and launch the latest Distil
 
-Requirements: macOS 14 or later, Xcode 15 or later (Swift 5.9+). No dependencies, API keys or network access are needed. Run these in Terminal, inside this `distil/` folder.
+Requirements: macOS 14 or later, Xcode 15 or later (Swift 5.9+). No dependencies, API keys or network access are needed. Every script works from any folder.
 
 **Recommended: build the app bundle and open exactly that copy**
 
 ```sh
-bash scripts/run-latest.sh
+bash distil/scripts/run-latest.sh            # or, inside distil/: bash scripts/run-latest.sh
+bash distil/scripts/run-latest.sh --test     # run the tests first and stop if they fail
 ```
 
-This runs the tests and builds `dist/Distil.app` with version 0.5.0 and the current git commit and build time. If a copy of Distil is already running, it asks that copy to quit first. That matters because `open` only brings a running app to the front; it doesn't start the new build. If you cancel the quit, the script stops and launches nothing.
+This checks the developer tools, packages `dist/Distil.app` (version 0.5.0, with the current git commit and build time), and opens that exact copy. Nothing is opened unless every step succeeded. If a copy of Distil is already running, it asks that copy to quit first. That matters because `open` only brings a running app to the front; it doesn't start the new build. If you cancel the quit, the script stops and launches nothing. After opening, it confirms the app is still running, so a launch crash is reported as one.
 
-**Alternatives**
+**Separate steps**
 
 ```sh
-swift test                 # core tests only
-swift run Distil           # run from SwiftPM; menu bar and Dock show "Distil"
-SKIP_TESTS=1 bash scripts/build-macos.sh && open dist/Distil.app
+bash scripts/check-prereqs.sh --tests   # read-only check of macOS, Swift, developer directory, SDK, XCTest
+bash scripts/test.sh                    # tests only; prints how many ran, were skipped and failed
+bash scripts/build-macos.sh             # package only; never compiles the test targets
+swift run Distil                        # run from SwiftPM; menu bar and Dock show "Distil"
 ```
+
+Tests need XCTest, which comes with full Xcode. With only the Command Line Tools selected, `swift test` fails with `no such module 'XCTest'`: that is the test build failing, not the app. `check-prereqs.sh --tests` prints the fix (for example `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash scripts/test.sh`) and never changes your selection. Packaging works with the Command Line Tools.
 
 **Xcode:** open `Package.swift`, choose the **Distil** scheme and **My Mac**, then Product → Test (⌘U) or Run (⌘R).
 
@@ -46,7 +50,7 @@ SKIP_TESTS=1 bash scripts/build-macos.sh && open dist/Distil.app
 **Optional model tokenizer files:** download `o200k_base.tiktoken` or `cl100k_base.tiktoken` yourself from the addresses shown in Settings, then import the file there. A file is accepted only if its SHA-256 matches the published value. To run the reference tokenizer tests as well:
 
 ```sh
-TOKENLAB_ENCODINGS_DIR=/folder/with/tiktoken/files swift test
+TOKENLAB_ENCODINGS_DIR=/folder/with/tiktoken/files bash scripts/test.sh
 ```
 
 ## Appearance (Futuristic skin)
@@ -130,7 +134,7 @@ The other demonstrations show a mixed coding task, a constraint that must be mar
 
 ## First-launch checklist (on your Mac)
 
-1. Run `bash scripts/run-latest.sh`. Tests pass, and Settings → About shows 0.5.0 (build 5) and the current commit.
+1. Run `bash scripts/run-latest.sh --test`. Tests pass, and Settings → About shows 0.5.0 (build 5) and the current commit.
 2. The menu bar, Dock, window and About menu all say **Distil**. `swift run Distil` shows Distil too.
 3. **Sidebar repro:**
    - Overview → Comparison with an empty project. Then load a demonstration and go Overview → Comparison again. The sidebar rows stay visible both times.
