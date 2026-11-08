@@ -6,7 +6,7 @@ import TokenLabCore
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var encodings: EncodingStore
-    @AppStorage(StoredPreference.appearance) private var appearance = "System"
+    @AppStorage(StoredPreference.appearance) private var appearance = DSAppearance.futuristic.rawValue
     @AppStorage(StoredPreference.autoPreview) private var autoPreview = true
     @State private var importing: BPEEncodingID?
 
@@ -39,117 +39,129 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $appearance) {
-                    Text("Match System").tag("System")
-                    Text("Light").tag("Light")
-                    Text("Dark").tag("Dark")
-                }
-                .pickerStyle(.radioGroup)
-            }
-
-            Section {
-                Picker("Counter", selection: counterOption) {
-                    Text("Approximate (UTF-8 bytes ÷ N)").tag(CounterOption.approximate)
-                    ForEach(BPEEncodingID.allCases) { id in
-                        Text("\(id.rawValue) text tokens\(encodings.state(id) == .notInstalled ? " — not imported" : "")").tag(CounterOption.bpe(id))
-                    }
-                }
-                if case .approximate = store.document.settings.counter {
-                    Stepper("Bytes per token: \(bytesPerToken.wrappedValue)", value: bytesPerToken, in: CounterChoice.bytesPerTokenRange)
-                    Text("A rough heuristic. English prose is often near 4 bytes per token; code, other languages and emoji vary widely.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let descriptor = store.activeCounterDescriptor {
-                    LabeledContent("Encoding", value: descriptor.encoding)
-                    LabeledContent("Version") { Text(descriptor.version).textSelection(.enabled).multilineTextAlignment(.trailing) }
-                    Text(descriptor.scope).font(.caption).foregroundStyle(.secondary)
-                } else if case .bpe(let id) = store.document.settings.counter {
-                    Label(encodings.state(id) == .notInstalled
-                          ? "Import the \(id.rawValue) file below to use this counter."
-                          : "\(id.rawValue): \(encodings.state(id).label). It loads when the preview runs.",
-                          systemImage: "info.circle")
-                        .font(.callout)
-                }
-            } header: {
-                Text("Token counting for this project")
-            } footer: {
-                Text("Saved in the project file and recorded in every preview and experiment, so results can be reproduced. Counts never include chat message formatting or provider overhead.")
-            }
-
-            Section {
-                ForEach(BPEEncodingID.allCases) { id in
-                    EncodingRow(id: id, importing: importing == id, onImport: { importEncoding(id) }, onRemove: { remove(id) })
-                }
-            } header: {
-                Text("Model tokenizer files")
-            } footer: {
-                Text("These vocabularies come from the open-source tiktoken project (MIT licence). They are not bundled and the app never downloads them: download a file yourself from the address shown, then import it. A file is accepted only if its SHA-256 matches the published value. Model families are listed as mapped in tiktoken 0.14.0. No offline tokenizer is published for some other providers’ current models; counting for those would need the provider’s own token-counting service through a future adapter.")
-            }
-
-            Section {
-                RankingMethodView()
-            } header: {
-                Text("Task relevance ranking")
-            } footer: {
-                Text("Ranking runs locally and deterministically. It is kept separate from token counting and selection so a stronger method can replace it later; the ranker’s name and version are recorded in every report.")
-            }
-
-            Section("Preview") {
-                Toggle("Update the preview automatically after edits", isOn: $autoPreview)
-                Text("When off, use Prompt → Update Preview (⌘↩). Previews are always hidden as soon as inputs or settings change.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section("Local data") {
-                LabeledContent("Projects") {
-                    Text("Only the JSON files you save. No autosave, no cloud sync.").multilineTextAlignment(.trailing)
-                }
-                LabeledContent("Model connections", value: "None — no network requests are made")
-                LabeledContent("Credentials", value: "None stored")
-                LabeledContent("Preferences") {
-                    HStack {
-                        Text("Theme and auto-preview")
-                        Button("Reset") {
-                            UserDefaults.standard.removeObject(forKey: StoredPreference.appearance)
-                            UserDefaults.standard.removeObject(forKey: StoredPreference.autoPreview)
-                            appearance = "System"; autoPreview = true
-                            store.status = "Preferences reset."
+        // Themed panels on the canvas instead of a grouped Form, whose system-drawn section
+        // backgrounds hid the design. Every control and action is unchanged.
+        ScrollView {
+            VStack(alignment: .leading, spacing: DS.Space.l) {
+                GroupBox("Appearance") {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        Picker("Appearance", selection: $appearance) {
+                            ForEach(DSAppearance.allCases) { option in
+                                Text(option.title).tag(option.rawValue)
+                            }
                         }
+                        .pickerStyle(.radioGroup)
+                        .labelsHidden()
+                        Text(DSAppearance.resolve(appearance).detail)
+                            .font(.caption).foregroundStyle(DS.textSecondary)
                     }
                 }
-                LabeledContent("Imported tokenizer files") {
-                    HStack {
-                        Button("Show in Finder") {
-                            try? FileManager.default.createDirectory(at: encodings.directory, withIntermediateDirectories: true)
-                            NSWorkspace.shared.open(encodings.directory)
-                        }
-                        Button("Remove All…", role: .destructive) { removeAll() }
-                            .disabled(BPEEncodingID.allCases.allSatisfy { encodings.state($0) == .notInstalled })
-                    }
-                }
-                Text(encodings.directory.path).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                Text("Project files are plain JSON and include all prompt text, context, answers and notes. Saving and exporting warn if text looks like an API key or private key.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
 
-            Section("About this build") {
-                let build = BuildInfo.current
-                LabeledContent("Version", value: "\(build.version) (build \(build.build)) · \(build.configuration)")
-                LabeledContent("Commit", value: build.commit ?? "Not recorded (built without scripts/build-macos.sh)")
-                LabeledContent("Built", value: build.builtAt ?? (build.executableModified.map { "Executable modified \($0.formatted(date: .abbreviated, time: .standard))" } ?? "Unknown"))
-                LabeledContent("Running from") {
-                    Text(build.launchMode).font(.caption.monospaced()).textSelection(.enabled).multilineTextAlignment(.trailing)
+                GroupBox("Token counting for this project") {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        Picker("Counter", selection: counterOption) {
+                            Text("Approximate (UTF-8 bytes ÷ N)").tag(CounterOption.approximate)
+                            ForEach(BPEEncodingID.allCases) { id in
+                                Text("\(id.rawValue) text tokens\(encodings.state(id) == .notInstalled ? " — not imported" : "")").tag(CounterOption.bpe(id))
+                            }
+                        }
+                        .frame(maxWidth: 460)
+                        if case .approximate = store.document.settings.counter {
+                            Stepper("Bytes per token: \(bytesPerToken.wrappedValue)", value: bytesPerToken, in: CounterChoice.bytesPerTokenRange)
+                            Text("A rough heuristic. English prose is often near 4 bytes per token; code, other languages and emoji vary widely.")
+                                .font(.caption).foregroundStyle(DS.textSecondary)
+                        }
+                        if let descriptor = store.activeCounterDescriptor {
+                            LabeledContent("Encoding", value: descriptor.encoding)
+                            LabeledContent("Version") { Text(descriptor.version).textSelection(.enabled).multilineTextAlignment(.trailing) }
+                            Text(descriptor.scope).font(.caption).foregroundStyle(DS.textSecondary)
+                        } else if case .bpe(let id) = store.document.settings.counter {
+                            Label(encodings.state(id) == .notInstalled
+                                  ? "Import the \(id.rawValue) file below to use this counter."
+                                  : "\(id.rawValue): \(encodings.state(id).label). It loads when the preview runs.",
+                                  systemImage: "info.circle")
+                                .font(.callout)
+                        }
+                        SettingsFootnote("Saved in the project file and recorded in every preview and experiment, so results can be reproduced. Counts never include chat message formatting or provider overhead.")
+                    }
                 }
-                LabeledContent("Project file schema", value: "\(ProjectDocument.currentSchemaVersion) (reads 1–\(ProjectDocument.currentSchemaVersion))")
-                LabeledContent("Selection engine", value: SelectionReport.currentEngineVersion)
-                Text("Distil is the working product name and the executable name. Package and module names (TokenLab*) and the bundle identifier are unchanged, so preferences, imported tokenizer files and saved projects carry over. No company identity, logos, accounts or third-party code are included.")
-                    .font(.caption).foregroundStyle(.secondary)
+
+                GroupBox("Model tokenizer files") {
+                    VStack(alignment: .leading, spacing: DS.Space.m) {
+                        ForEach(BPEEncodingID.allCases) { id in
+                            EncodingRow(id: id, importing: importing == id, onImport: { importEncoding(id) }, onRemove: { remove(id) })
+                            if id != BPEEncodingID.allCases.last { Divider().overlay(DS.accent.opacity(0.12)) }
+                        }
+                        SettingsFootnote("These vocabularies come from the open-source tiktoken project (MIT licence). They are not bundled and the app never downloads them: download a file yourself from the address shown, then import it. A file is accepted only if its SHA-256 matches the published value. Model families are listed as mapped in tiktoken 0.14.0. No offline tokenizer is published for some other providers’ current models; counting for those would need the provider’s own token-counting service through a future adapter.")
+                    }
+                }
+
+                GroupBox("Task relevance ranking") {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        RankingMethodView()
+                        SettingsFootnote("Ranking runs locally and deterministically. It is kept separate from token counting and selection so a stronger method can replace it later; the ranker’s name and version are recorded in every report.")
+                    }
+                }
+
+                GroupBox("Preview") {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        Toggle("Update the preview automatically after edits", isOn: $autoPreview)
+                        SettingsFootnote("When off, use Prompt → Update Preview (⌘↩). Previews are always hidden as soon as inputs or settings change.")
+                    }
+                }
+
+                GroupBox("Local data") {
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        LabeledContent("Projects") {
+                            Text("Only the JSON files you save. No autosave, no cloud sync.").multilineTextAlignment(.trailing)
+                        }
+                        LabeledContent("Model connections", value: "None — no network requests are made")
+                        LabeledContent("Credentials", value: "None stored")
+                        LabeledContent("Preferences") {
+                            HStack {
+                                Text("Appearance and auto-preview")
+                                Button("Reset") {
+                                    UserDefaults.standard.removeObject(forKey: StoredPreference.appearance)
+                                    UserDefaults.standard.removeObject(forKey: StoredPreference.autoPreview)
+                                    appearance = DSAppearance.futuristic.rawValue; autoPreview = true
+                                    store.status = "Preferences reset."
+                                }
+                            }
+                        }
+                        LabeledContent("Imported tokenizer files") {
+                            HStack {
+                                Button("Show in Finder") {
+                                    try? FileManager.default.createDirectory(at: encodings.directory, withIntermediateDirectories: true)
+                                    NSWorkspace.shared.open(encodings.directory)
+                                }
+                                Button("Remove All…", role: .destructive) { removeAll() }
+                                    .disabled(BPEEncodingID.allCases.allSatisfy { encodings.state($0) == .notInstalled })
+                            }
+                        }
+                        Text(encodings.directory.path).font(.caption.monospaced()).foregroundStyle(DS.textSecondary).textSelection(.enabled)
+                        SettingsFootnote("Project files are plain JSON and include all prompt text, context, answers and notes. Saving and exporting warn if text looks like an API key or private key.")
+                    }
+                }
+
+                GroupBox("About this build") {
+                    let build = BuildInfo.current
+                    VStack(alignment: .leading, spacing: DS.Space.s) {
+                        LabeledContent("Version", value: "\(build.version) (build \(build.build)) · \(build.configuration)")
+                        LabeledContent("Commit", value: build.commit ?? "Not recorded (built without scripts/build-macos.sh)")
+                        LabeledContent("Built", value: build.builtAt ?? (build.executableModified.map { "Executable modified \($0.formatted(date: .abbreviated, time: .standard))" } ?? "Unknown"))
+                        LabeledContent("Running from") {
+                            Text(build.launchMode).font(.caption.monospaced()).textSelection(.enabled).multilineTextAlignment(.trailing)
+                        }
+                        LabeledContent("Project file schema", value: "\(ProjectDocument.currentSchemaVersion) (reads 1–\(ProjectDocument.currentSchemaVersion))")
+                        LabeledContent("Selection engine", value: SelectionReport.currentEngineVersion)
+                        SettingsFootnote("Distil is the working product name and the executable name. Package and module names (TokenLab*) and the bundle identifier are unchanged, so preferences, imported tokenizer files and saved projects carry over. No company identity, logos, accounts or third-party code are included.")
+                    }
+                }
             }
+            .padding(DS.Space.xl - 4)
+            .frame(maxWidth: 860, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     private func importEncoding(_ id: BPEEncodingID) {
@@ -208,10 +220,20 @@ struct EncodingRow: View {
             Text("Model families: \(spec.modelFamilies.joined(separator: ", "))")
                 .font(.caption)
             Text("Source: \(spec.officialFileURL)")
-                .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                .font(.caption.monospaced()).foregroundStyle(DS.textSecondary).textSelection(.enabled)
             Text("SHA-256: \(spec.expectedSHA256)")
-                .font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                .font(.caption2.monospaced()).foregroundStyle(DS.textSecondary).textSelection(.enabled)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Explanatory text under a settings panel.
+private struct SettingsFootnote: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text).font(.caption).foregroundStyle(DS.textSecondary).fixedSize(horizontal: false, vertical: true)
     }
 }

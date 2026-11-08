@@ -36,6 +36,18 @@ SKIP_TESTS=1 bash scripts/build-macos.sh && open dist/Distil.app
 TOKENLAB_ENCODINGS_DIR=/folder/with/tiktoken/files swift test
 ```
 
+## Appearance (Futuristic skin)
+
+Distil and Relay share one original design: a deep navy canvas with a faint technical grid, navy
+panels with thin cyan borders, a filled teal sidebar selection with a cyan indicator, cyan breadcrumbs
+above bold page titles, cyan primary buttons with dark text, and themed fields and secondary buttons.
+**Futuristic** is the default appearance. Settings › Appearance also offers Dark (no grid or glow),
+Light and Match System. Installations that were on "Match System" move to Futuristic once; an
+explicit Dark or Light choice is kept. The sidebar's Build card shows which copy is running.
+
+The skin has not yet been viewed on a Mac. Build, launch and check it with
+`../relay/docs/SKIN-VERIFICATION.md` (it covers both apps).
+
 ## Using the Prompt Workspace
 
 The workspace walks through five steps:

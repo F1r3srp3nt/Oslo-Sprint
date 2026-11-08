@@ -129,7 +129,7 @@ struct TrainingView: View {
     private var questionBox: some View {
         HStack {
             TextField("Ask about this procedure (e.g. \u{201C}What if a label is unreadable?\u{201D})", text: $question)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.ds)
                 .onSubmit(ask)
             Button("Ask", action: ask).disabled(question.trimmingCharacters(in: .whitespaces).isEmpty)
         }

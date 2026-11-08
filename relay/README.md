@@ -46,6 +46,8 @@ cd relay
 ./scripts/build-app.sh
 open build/Relay.app
 
+./scripts/run-latest.sh                   # rebuild, quit any running Relay, open exactly build/Relay.app
+
 # Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
 swift run Relay
 
@@ -53,6 +55,18 @@ swift run Relay
 # push-to-talk — a bare executable has no Info.plist/NSMicrophoneUsageDescription, and macOS
 # terminates apps that request the microphone without one. Use Option A for voice.
 ```
+
+## Appearance (Futuristic skin)
+
+Distil and Relay share one original design: a deep navy canvas with a faint technical grid, navy
+panels with thin cyan borders, a filled teal sidebar selection with a cyan indicator, cyan breadcrumbs
+above bold page titles, cyan primary buttons with dark text, and themed fields and secondary buttons.
+**Futuristic** is the default appearance. Settings › Appearance also offers Dark (no grid or glow),
+Light and Match System. Installations that were on "Match System" move to Futuristic once; an
+explicit Dark or Light choice is kept. The sidebar's Build card shows which copy is running.
+
+The skin has not yet been viewed on a Mac. Build, launch and check it with
+`relay/docs/SKIN-VERIFICATION.md`.
 
 ## Headless runner (macOS or Linux)
 

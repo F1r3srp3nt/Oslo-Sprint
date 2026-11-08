@@ -45,15 +45,19 @@ struct WorkspaceView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { showingPaste = true } label: { Label("Paste Context", systemImage: "doc.on.clipboard") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Paste text and split it into context blocks")
                 Button { store.addWorkspaceBlock() } label: { Label("Add Context", systemImage: "plus.rectangle") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Add a context block (⌥⌘N)")
                 LibraryInsertMenu()
+                    .buttonStyle(.automatic)  // native toolbar look
                 Button { store.preview() } label: { Label("Update Preview", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Run the selection on the current inputs (⌘↩)")
             }
         }
-        .sheet(isPresented: $showingPaste) { PasteContextSheet() }
+        .sheet(isPresented: $showingPaste) { PasteContextSheet().dsSheetContent() }
         .confirmationDialog("Delete “\(pendingDeletion?.title ?? "")”?",
                             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } })) {
             Button("Delete Block", role: .destructive) {
@@ -234,7 +238,7 @@ struct LinesEditor: View {
                     TextField(placeholder, text: Binding(
                         get: { lines.indices.contains(index) ? lines[index] : "" },
                         set: { if lines.indices.contains(index) { lines[index] = $0 } }))
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.ds)
                     Button(role: .destructive) { if lines.indices.contains(index) { lines.remove(at: index) } } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Remove \(title.lowercased()) item")
@@ -298,7 +302,7 @@ extension SelectionSettingsPanel {
     @ViewBuilder var budgetControls: some View {
         Text("Token budget").fixedSize()
         TextField("Budget", value: budget, format: .number.grouping(.never))
-            .textFieldStyle(.roundedBorder).frame(width: 90)
+            .textFieldStyle(.ds).frame(width: 90)
             .multilineTextAlignment(.trailing)
             .accessibilityLabel("Token budget")
         Stepper("Token budget", value: budget, in: SelectionSettings.budgetRange, step: 50).labelsHidden()
@@ -334,7 +338,7 @@ struct ContextBlockEditor: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     TextField("Title", text: $block.title)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.ds)
                         .font(.headline)
                         .accessibilityLabel("Context title")
                     Picker("Category", selection: $block.category) {

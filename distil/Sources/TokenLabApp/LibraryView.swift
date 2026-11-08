@@ -52,6 +52,7 @@ struct LibraryView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { store.newLibraryItem() } label: { Label("New Item", systemImage: "plus") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Create a library item")
                     .disabled(store.document.library.count >= ProjectDocument.maxLibraryItems)
             }

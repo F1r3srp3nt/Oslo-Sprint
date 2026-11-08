@@ -32,11 +32,15 @@ struct ContentView: View {
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
         .tint(DS.accent)
+        // The canvas shows through the title bar and toolbar instead of the grey system material.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button { store.openProject() } label: { Label("Open Project", systemImage: "folder") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Open a project file (⌘O)")
                 Button { _ = store.save() } label: { Label("Save Project", systemImage: "square.and.arrow.down") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Save the project (⌘S)")
             }
         }
@@ -72,10 +76,17 @@ struct ContentView: View {
                             systemImage: store.hasUnsavedChanges ? "pencil.circle" : "checkmark.circle",
                             tone: store.hasUnsavedChanges ? .warning : .neutral),
                 DSStatusRow(label: "Environment", value: "Local only", systemImage: "desktopcomputer", tone: .accent),
-                DSStatusRow(label: "Model connection", value: "None · no network use", systemImage: "bolt.horizontal.circle", tone: .neutral)
+                DSStatusRow(label: "Model connection", value: "None · no network use", systemImage: "bolt.horizontal.circle", tone: .neutral),
+                DSStatusRow(label: "Build", value: buildSummary, systemImage: "shippingbox", tone: .neutral)
             ])
             .padding(DS.Space.s)
         }
+    }
+
+    /// Version and commit of the running copy (full details in Settings › About this build).
+    private var buildSummary: String {
+        let build = BuildInfo.current
+        return "\(build.version)" + (build.commit.map { " · \($0)" } ?? " · dev")
     }
 
     private var sidebarGroups: [DSSidebarGroup<AppSection>] {
@@ -111,6 +122,9 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Themed defaults for every screen; explicit styles (primary, link, plain, toolbar) win.
+            .buttonStyle(.dsSecondary)
+            .textFieldStyle(.ds)
         }
         .navigationTitle(section.title)
         .navigationSubtitle(store.windowSubtitle)

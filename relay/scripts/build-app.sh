@@ -9,7 +9,11 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 swift build -c release --product Relay
 BIN="$(swift build -c release --show-bin-path)/Relay"
-APP="build/Relay.app"
+APP="$PWD/build/Relay.app"
+# Identify this build so the app (sidebar Build card, Settings › About this build) shows which copy runs.
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if [[ -n "$(git status --porcelain -- . 2>/dev/null)" ]]; then COMMIT="$COMMIT+uncommitted"; fi
+BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Relay"
@@ -23,8 +27,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>com.oslosprint.relay</string>
   <key>CFBundleExecutable</key><string>Relay</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.2.0</string>
+  <key>CFBundleVersion</key><string>2</string>
+  <key>RelayGitCommit</key><string>${COMMIT}</string>
+  <key>RelayBuildDate</key><string>${BUILT_AT}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key>
@@ -33,5 +39,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 codesign --force --sign - "$APP"
-echo "Built $APP"
-echo "Run with: open $APP"
+echo "Built $APP (commit $COMMIT, built $BUILT_AT)"
+echo "Open exactly this copy with:"
+echo "  open \"$APP\""

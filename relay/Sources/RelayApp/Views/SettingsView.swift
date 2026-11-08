@@ -15,6 +15,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 SectionHeader(title: "Settings",
                               subtitle: "Set up speech step by step. Everything except voice works without any setup.")
+                AppearancePanel()
                 ReadinessPanel()
                 SetupGroupHeader(title: "ElevenLabs speech", detail: "Speech to text for push-to-talk, text to speech for spoken replies.")
                 APIKeyStep()
@@ -23,12 +24,56 @@ struct SettingsView: View {
                 ModelsStep()
                 ReasoningPanel()
                 WybePanel()
+                AboutBuildPanel()
             }
             .frame(maxWidth: 820, alignment: .leading)
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { model.refreshMicrophone() }
+    }
+}
+
+// MARK: - Appearance and build
+
+private struct AppearancePanel: View {
+    @AppStorage(DSAppearance.storageKey) private var appearance = DSAppearance.futuristic.rawValue
+
+    var body: some View {
+        Panel {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Appearance").font(.headline)
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(DSAppearance.allCases) { option in Text(option.title).tag(option.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 460)
+                Text(DSAppearance.resolve(appearance).detail)
+                    .font(.caption).foregroundStyle(Theme.textSecondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct AboutBuildPanel: View {
+    var body: some View {
+        let build = BuildInfo.current
+        Panel {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("About this build").font(.headline)
+                LabeledRow(label: "Version") { Text("\(build.version) (build \(build.build)) · \(build.configuration)") }
+                LabeledRow(label: "Commit") { Text(build.commit ?? "Not recorded (built without scripts/build-app.sh)") }
+                LabeledRow(label: "Built") {
+                    Text(build.builtAt ?? build.executableModified.map { "Executable modified \($0.formatted(date: .abbreviated, time: .standard))" } ?? "Unknown")
+                }
+                LabeledRow(label: "Running from") {
+                    Text(build.launchMode).font(.caption.monospaced()).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .font(.callout)
+        }
     }
 }
 
@@ -335,12 +380,14 @@ private struct APIKeyStep: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 AdaptiveRow {
+                    // Native secure field on purpose: secure entry, focus ring and password handling stay
+                    // exactly the system's (it follows the dark appearance).
                     SecureField(model.keySaved ? "Paste the new key" : "Paste your ElevenLabs API key", text: $keyEntry)
                         .textFieldStyle(.roundedBorder)
                         .frame(minWidth: 220, maxWidth: 380)
                         .onSubmit(save)
                     Button("Save to Keychain", action: save)
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.dsPrimary)
                         .disabled(keyEntry.trimmingCharacters(in: .whitespaces).isEmpty)
                     if replacing {
                         Button("Cancel") { replacing = false; keyEntry = ""; keyError = nil }
@@ -428,7 +475,7 @@ private struct VoiceStep: View {
                     .font(.callout.monospaced()).textSelection(.enabled)
                 AdaptiveRow {
                     TextField("Paste a voice ID", text: $voiceDraft)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.ds)
                         .frame(minWidth: 220, maxWidth: 320)
                         .onSubmit(save)
                     Button("Save voice ID", action: save)
@@ -667,7 +714,7 @@ private struct OverrideField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             TextField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.ds)
                 .font(.callout.monospaced())
                 .frame(maxWidth: 360)
             if !model.isPlainIdentifier(text) {
