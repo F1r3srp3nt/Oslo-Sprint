@@ -13,15 +13,20 @@ struct WybeRunnerView: View {
             liveStatus
             controls
             HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 14) {
-                    observationPanel
-                    reportsPanel
+                // Scrolls on its own, so a long task list never makes the page taller than the window.
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        observationPanel
+                        reportsPanel
+                    }
                 }
                 .frame(width: 340)
                 historyPanel
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var liveStatus: some View {
@@ -118,6 +123,10 @@ struct WybeRunnerView: View {
         Panel {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Action history").font(.headline)
+                if model.wybeRecords.isEmpty {
+                    Text("No actions yet. Run the simulation to see each decision, attempt and result here.")
+                        .font(.callout).foregroundStyle(Theme.textSecondary)
+                }
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 6) {

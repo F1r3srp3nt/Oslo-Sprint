@@ -20,7 +20,7 @@ relay/
 │   └── RelayApp/                 macOS 14 SwiftUI app (only added to the package on macOS)
 ├── Tests/                        XCTest: RelayCoreTests, RelayAdaptersTests
 ├── docs/                         this file, WYBE.md, ELEVENLABS.md, WAREHOUSE.md, demo-procedure.json
-└── scripts/                      test.sh, build-app.sh, demo-warehouse.sh, check-no-secrets.sh
+└── scripts/                      check-prereqs.sh, test.sh, build-app.sh, run-latest.sh, verify-macos.sh, demo-warehouse.sh, check-no-secrets.sh
 ```
 
 ## Pipeline (Assistant)

@@ -7,6 +7,8 @@ import TokenLabCore
 enum LaunchOptions {
     static var demo: DemoDataset.ID? { value("--screenshot-demo").flatMap(DemoDataset.ID.init(rawValue:)) }
     static var section: AppSection? { value("--screenshot-section").flatMap(AppSection.init(rawValue:)) }
+    /// Where `--self-check` writes its launch report (see `LaunchSelfCheck`).
+    static var selfCheckReport: String? { value("--self-check") }
 
     @MainActor private static var applied = false
 

@@ -62,6 +62,8 @@ jobs:
         run: bash scripts/build-macos.sh
       - name: Launch check (opens the packaged app)
         run: bash ../.github/scripts/launch-check.sh dist/Distil.app 8
+      - name: Self-check (the running app reports its bundle, Info.plist commit and windows)
+        run: bash ../.github/scripts/self-check.sh dist/Distil.app
       # Window captures of the built app, for checking the look without a Mac. Download them from the
       # run's Artifacts. Not a test: a capture problem doesn't fail the job.
       - name: Screenshots
@@ -126,3 +128,5 @@ jobs:
         run: bash scripts/build-macos.sh
       - name: Launch check
         run: bash ../.github/scripts/launch-check.sh dist/Distil.app 8
+      - name: Self-check (the running app reports its bundle, Info.plist commit and windows)
+        run: bash ../.github/scripts/self-check.sh dist/Distil.app

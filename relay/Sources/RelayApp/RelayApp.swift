@@ -13,6 +13,7 @@ import SwiftUI
         // Needed when launched with `swift run` (no app bundle): become a regular foreground app.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        LaunchSelfCheck.runIfRequested()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -92,8 +93,11 @@ struct ContentView: View {
                     .buttonStyle(.dsSecondary)
                     .textFieldStyle(.ds)
                     .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .layoutPriority(1)
             }
+            // Pinned to the window: a page taller than the window can never push the sidebar down.
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
