@@ -7,3 +7,4 @@ DerivedData/
 .DS_Store
 # Runner output (may contain run history; never credentials, but keep out of git)
 runs/
+*.log

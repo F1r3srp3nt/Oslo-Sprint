@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import RelayAdapters
 
 /// Push-to-talk recorder. Records AAC (m4a, 16 kHz mono) to a temporary file that the app
 /// deletes as soon as transcription finishes.
@@ -12,6 +13,17 @@ final class AudioRecorder {
 
     private var recorder: AVAudioRecorder?
     private var fileURL: URL?
+
+    /// Current microphone authorisation, without prompting.
+    static var permission: MicrophonePermission {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return .granted
+        case .denied: return .denied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
 
     static func requestPermission() async -> Bool {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {

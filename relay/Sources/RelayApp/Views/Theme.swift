@@ -1,3 +1,4 @@
+import RelayAdapters
 import RelayCore
 import SwiftUI
 
@@ -61,6 +62,41 @@ enum Theme {
         case .needsAttention, .awaitingApproval: return warning
         case .declined: return textSecondary
         }
+    }
+
+    static func color(_ state: CheckState) -> Color {
+        switch state {
+        case .passed: return success
+        case .failed: return danger
+        case .attention: return warning
+        case .checking: return accent
+        case .notChecked: return textSecondary
+        }
+    }
+
+    static func label(_ state: CheckState) -> String {
+        switch state {
+        case let .passed(at, _): return "Passed \(at.formatted(date: .omitted, time: .shortened))"
+        case .failed: return "Failed"
+        case .attention: return "Needs attention"
+        case .checking: return "Checking…"
+        case .notChecked: return "Not tested"
+        }
+    }
+
+    static func color(_ permission: MicrophonePermission) -> Color {
+        switch permission {
+        case .granted: return success
+        case .denied, .restricted: return danger
+        case .notDetermined, .unknown: return textSecondary
+        }
+    }
+
+    static func color(_ readiness: ElevenLabsReadiness) -> Color {
+        if !readiness.keySaved { return textSecondary }
+        if readiness.speechInput.problem != nil || readiness.speechOutput.problem != nil { return warning }
+        if readiness.speechInput.isPassed && (readiness.speechOutput.isPassed || !readiness.voiceIDSet) { return success }
+        return warning
     }
 
     static func color(_ status: SpeechServiceStatus) -> Color {

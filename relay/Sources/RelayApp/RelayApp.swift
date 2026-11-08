@@ -1,4 +1,5 @@
 import AppKit
+import RelayAdapters
 import RelayCore
 import SwiftUI
 
@@ -94,11 +95,10 @@ struct ContentView: View {
     }
 
     private var speechSymbol: String {
-        switch model.connectionStatus {
-        case .connected: return "checkmark.circle"
-        case .failed: return "exclamationmark.triangle"
-        case .unconfigured: return "keyboard"
-        default: return "circle.dashed"
+        switch speechTone {
+        case .success: return "checkmark.circle"
+        case .warning: return "exclamationmark.triangle"
+        default: return "keyboard"
         }
     }
 
@@ -123,7 +123,7 @@ struct ContentView: View {
 
     private var sidebarFooter: some View {
         DSStatusCard(rows: [
-            DSStatusRow(label: "Speech", value: model.connectionStatus.label, systemImage: speechSymbol, tone: speechTone),
+            DSStatusRow(label: "Speech", value: model.readiness.summary, systemImage: speechSymbol, tone: speechTone),
             DSStatusRow(label: "Wybe runner", value: model.wybeRunning ? "Simulation running" : "Idle · simulation only",
                         systemImage: "testtube.2", tone: model.wybeRunning ? .simulation : .neutral),
             DSStatusRow(label: "Reasoning", value: model.reasonerName.isEmpty ? "Built-in rules" : model.reasonerName,
@@ -132,12 +132,12 @@ struct ContentView: View {
         .padding(DS.Space.s)
     }
 
+    /// Same rules as `Theme.color(_: ElevenLabsReadiness)`, expressed as a tone for the status card.
     private var speechTone: DSTone {
-        switch model.connectionStatus {
-        case .connected: return .success
-        case .failed: return .danger
-        case .checking, .configuredUnverified: return .warning
-        case .unconfigured: return .neutral
-        }
+        let readiness = model.readiness
+        if !readiness.keySaved { return .neutral }
+        if readiness.speechInput.problem != nil || readiness.speechOutput.problem != nil { return .warning }
+        if readiness.speechInput.isPassed && (readiness.speechOutput.isPassed || !readiness.voiceIDSet) { return .success }
+        return .warning
     }
 }
