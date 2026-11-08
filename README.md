@@ -22,11 +22,11 @@ Both names are working names.
 ```sh
 cd distil
 swift test                       # core tests
-swift run TokenLab               # run the app (macOS)
-bash scripts/build-macos.sh      # local dist/Distil.app (tests, build, ad-hoc sign)
+bash scripts/run-latest.sh       # build dist/Distil.app, quit any running copy, open the new one
+swift run Distil                 # run from SwiftPM (macOS)
 ```
 
-In Xcode, open `distil/Package.swift` and run the **TokenLab** scheme. The internal package, module and executable names are still `TokenLab*`.
+In Xcode, open `distil/Package.swift` and run the **Distil** scheme. The internal package and module names are still `TokenLab*`; the bundle identifier is unchanged.
 
 **Relay**
 

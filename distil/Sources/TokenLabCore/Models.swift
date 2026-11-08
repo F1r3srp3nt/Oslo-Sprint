@@ -37,12 +37,15 @@ public struct ContextBlock: Identifiable, Codable, Equatable, Hashable, Sendable
     /// When the block was inserted from the Context Library, the library item it was copied from.
     /// The copy is independent: later edits to either side do not propagate.
     public var libraryOrigin: UUID?
+    /// When the block came from pasted material, the `PastedSource` that holds the original.
+    public var pastedSourceID: UUID?
 
     public init(id: UUID = UUID(), title: String = "Untitled context", text: String = "",
                 category: ContextCategory = .reference, priority: Int = ContextPriority.medium,
-                required: Bool = false, libraryOrigin: UUID? = nil) {
+                required: Bool = false, libraryOrigin: UUID? = nil, pastedSourceID: UUID? = nil) {
         self.id = id; self.title = title; self.text = text; self.category = category
         self.priority = priority; self.required = required; self.libraryOrigin = libraryOrigin
+        self.pastedSourceID = pastedSourceID
     }
 
     /// A copy with a fresh identifier, suitable for inserting elsewhere.

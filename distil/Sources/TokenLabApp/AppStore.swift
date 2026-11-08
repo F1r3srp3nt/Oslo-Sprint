@@ -264,6 +264,57 @@ enum AppSection: String, CaseIterable, Identifiable {
         return document.draft.blocks.indices.contains(index + offset)
     }
 
+    /// Add blocks proposed from a paste, keeping the exact original in the project. Returns false
+    /// (with an explanation) when the workspace limits would be exceeded; nothing is added then.
+    @discardableResult
+    func addPastedContext(title: String, original: String, blocks proposals: [ProposedBlock]) -> Bool {
+        guard !proposals.isEmpty else { return false }
+        let source = PastedSource(title: title, text: original)
+        let blocks = proposals.map {
+            ContextBlock(title: $0.title, text: $0.text, category: $0.category, priority: ContextPriority.medium,
+                         required: $0.required, pastedSourceID: source.id)
+        }
+        var draft = document.draft
+        draft.blocks += blocks
+        do { try SelectionEngine.validate(draft) }
+        catch { fail("The pasted context was not added. \(error.localizedDescription)"); return false }
+        document.pastedSources.append(source)
+        document.draft = draft
+        selectedSection = .workspace
+        status = "Added \(blocks.count) block\(blocks.count == 1 ? "" : "s") from “\(title)”. The original is kept in the project."
+        return true
+    }
+
+    func removePastedSource(_ id: UUID) {
+        guard let source = document.pastedSources.first(where: { $0.id == id }) else { return }
+        guard Dialogs.confirm(title: "Remove the original “\(source.title)”?",
+                              message: "The exact pasted text will no longer be kept in this project. Blocks already made from it stay in the workspace.",
+                              confirmTitle: "Remove Original") else { return }
+        document.pastedSources.removeAll { $0.id == id }
+        for index in document.draft.blocks.indices where document.draft.blocks[index].pastedSourceID == id {
+            document.draft.blocks[index].pastedSourceID = nil
+        }
+        status = "Removed the original “\(source.title)”."
+    }
+
+    /// Make a block Required and run the selection again straight away.
+    func markRequired(_ id: UUID) {
+        guard let index = document.draft.blocks.firstIndex(where: { $0.id == id }) else { return }
+        document.draft.blocks[index].required = true
+        status = "“\(document.draft.blocks[index].title)” is now Required and will always be kept."
+        preview()
+    }
+
+    /// Ask the workspace editor to scroll to a block.
+    @Published var revealedBlockID: UUID?
+    /// The decision whose details are open in the review panel (kept across re-runs).
+    @Published var inspectedBlockID: UUID?
+
+    func revealBlock(_ id: UUID) {
+        selectedSection = .workspace
+        revealedBlockID = id
+    }
+
     func copyToLibrary(_ id: UUID) {
         guard let block = document.draft.blocks.first(where: { $0.id == id }) else { return }
         guard document.library.count < ProjectDocument.maxLibraryItems else { return fail("The library is limited to \(ProjectDocument.maxLibraryItems) items.") }

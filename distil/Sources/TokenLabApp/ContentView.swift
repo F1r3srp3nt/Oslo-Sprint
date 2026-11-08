@@ -11,15 +11,23 @@ struct ContentView: View {
                 set: { store.selectedSection = $0 })
     }
 
+    /// Sidebar width chosen by dragging the handle; clamped to what the window allows.
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 210
+
     var body: some View {
-        // A plain split view rather than an adaptive NavigationSplitView: the sidebar is a
-        // persistent pane that the system never collapses when a detail section needs more width.
-        HSplitView {
-            sidebar
-                .frame(minWidth: Self.sidebarMinWidth, idealWidth: 210, maxWidth: 280, maxHeight: .infinity)
-            detail
-                .frame(minWidth: Self.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(1)
+        // The sidebar is plain SwiftUI with a fixed width, laid out beside the detail pane in one
+        // HStack. There is no AppKit split view or adaptive NavigationSplitView at the root, so no
+        // section's layout, toolbar or minimum width can collapse the sidebar or blank its rows.
+        GeometryReader { proxy in
+            let width = Self.sidebarWidth(stored: sidebarWidth, windowWidth: proxy.size.width)
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: width)
+                    .frame(maxHeight: .infinity)
+                SidebarResizeHandle(width: $sidebarWidth, range: Self.sidebarMinWidth...Self.sidebarMaxWidth)
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
@@ -47,7 +55,14 @@ struct ContentView: View {
     /// Window minimum (760) ≥ sidebar minimum + divider + detail minimum. Each section's own panes
     /// must fit within `detailMinWidth`.
     static let sidebarMinWidth: CGFloat = 180
+    static let sidebarMaxWidth: CGFloat = 280
     static let detailMinWidth: CGFloat = 560
+
+    /// The stored width, clamped to 180–280 and to whatever leaves the detail pane its minimum.
+    static func sidebarWidth(stored: Double, windowWidth: CGFloat) -> CGFloat {
+        let upper = max(sidebarMinWidth, min(sidebarMaxWidth, windowWidth - detailMinWidth - SidebarResizeHandle.width))
+        return min(max(CGFloat(stored), sidebarMinWidth), upper)
+    }
 
     private var sidebar: some View {
         DSSidebar(groups: sidebarGroups, selection: sectionSelection, topInset: DS.Space.s,
@@ -137,5 +152,51 @@ struct StatusBar: View {
         .background(DS.surface.opacity(0.85))
         .overlay(alignment: .top) { Rectangle().fill(DS.accent.opacity(0.16)).frame(height: 1) }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Drag to resize the sidebar. Also adjustable with VoiceOver (increment/decrement).
+struct SidebarResizeHandle: View {
+    static let width: CGFloat = 5
+    @Binding var width: Double
+    let range: ClosedRange<CGFloat>
+    @State private var dragStart: Double?
+    @State private var hovering = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: Self.width)
+            .frame(maxHeight: .infinity)
+            .overlay(Rectangle().fill(DS.accent.opacity(hovering || dragStart != nil ? 0.45 : 0.16)).frame(width: 1))
+            .contentShape(Rectangle())
+            .onHover { inside in
+                hovering = inside
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        let start = dragStart ?? width
+                        dragStart = start
+                        width = clamp(start + Double(value.translation.width))
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
+            .accessibilityElement()
+            .accessibilityLabel("Sidebar width")
+            .accessibilityValue("\(Int(width)) points")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: width = clamp(width + 10)
+                case .decrement: width = clamp(width - 10)
+                @unknown default: break
+                }
+            }
+            .help("Drag to resize the sidebar")
+    }
+
+    private func clamp(_ value: Double) -> Double {
+        min(max(value, Double(range.lowerBound)), Double(range.upperBound))
     }
 }

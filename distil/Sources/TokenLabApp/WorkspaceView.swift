@@ -4,18 +4,37 @@ import TokenLabCore
 struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
     @State private var pendingDeletion: ContextBlock?
+    @State private var showingPaste = false
+
+    private var draft: Draft { store.document.draft }
 
     var body: some View {
         HSplitView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    TaskEditor()
-                    InstructionsEditor()
-                    SelectionSettingsPanel()
-                    contextSection
-                    ReviewTemplateEditor()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        StepHeader(number: 1, title: "Describe your task",
+                                   detail: "The task and the protected instructions are always sent exactly as written.",
+                                   done: !draft.task.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        TaskEditor()
+                        InstructionsEditor()
+                        StepHeader(number: 2, title: "Add supporting context",
+                                   detail: "Paste documents, notes, requirements or code, or add blocks one at a time. Optional blocks may be left out; mark essentials Required.",
+                                   done: draft.blocks.contains { !$0.text.isEmpty })
+                            .id("step2")
+                        contextSection
+                        StepHeader(number: 3, title: "Choose a strategy and budget",
+                                   detail: "The budget applies to the whole prepared prompt. Steps 4 and 5 are in the panel on the right.")
+                        SelectionSettingsPanel()
+                        ReviewTemplateEditor()
+                    }
+                    .padding(20)
                 }
-                .padding(20)
+                .onChange(of: store.revealedBlockID) { _, id in
+                    guard let id else { return }
+                    withAnimation(DS.motion(false)) { proxy.scrollTo(id, anchor: .top) }
+                    store.revealedBlockID = nil
+                }
             }
             .frame(minWidth: 300, idealWidth: 600, maxWidth: .infinity, maxHeight: .infinity)
 
@@ -24,6 +43,8 @@ struct WorkspaceView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button { showingPaste = true } label: { Label("Paste Context", systemImage: "doc.on.clipboard") }
+                    .help("Paste text and split it into context blocks")
                 Button { store.addWorkspaceBlock() } label: { Label("Add Context", systemImage: "plus.rectangle") }
                     .help("Add a context block (⌥⌘N)")
                 LibraryInsertMenu()
@@ -31,6 +52,7 @@ struct WorkspaceView: View {
                     .help("Run the selection on the current inputs (⌘↩)")
             }
         }
+        .sheet(isPresented: $showingPaste) { PasteContextSheet() }
         .confirmationDialog("Delete “\(pendingDeletion?.title ?? "")”?",
                             isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } })) {
             Button("Delete Block", role: .destructive) {
@@ -51,7 +73,8 @@ struct WorkspaceView: View {
                 Text("\(store.document.draft.blocks.count) block\(store.document.draft.blocks.count == 1 ? "" : "s")")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button { store.addWorkspaceBlock() } label: { Label("Add Context", systemImage: "plus") }
+                Button { showingPaste = true } label: { Label("Paste Context…", systemImage: "doc.on.clipboard") }
+                Button { store.addWorkspaceBlock() } label: { Label("Add Block", systemImage: "plus") }
                     .disabled(store.document.draft.blocks.count >= SelectionEngine.maxBlocks)
             }
             Text("Blocks appear in the prompt in this order. Optional blocks may be removed by the selected strategy; required blocks never are.")
@@ -62,11 +85,12 @@ struct WorkspaceView: View {
                 } description: {
                     Text("Add reference text, conversation, code or tool output — or insert a reusable item from the Context Library.")
                 } actions: {
-                    Button("Add Context") { store.addWorkspaceBlock() }
-                    Button("Load Example Project") { store.loadExample() }
+                    Button("Paste Context…") { showingPaste = true }.buttonStyle(.dsPrimary)
+                    Button("Add Block") { store.addWorkspaceBlock() }
                 }
                 .frame(minHeight: 200)
             }
+            PastedOriginalsView()
             ForEach($store.document.draft.blocks) { $block in
                 let decision = decisions[block.id]
                 ContextBlockEditor(
@@ -74,6 +98,7 @@ struct WorkspaceView: View {
                     tokenLabel: store.liveCountLabel(block.text, known: decision?.standaloneTokens),
                     decision: decision,
                     actions: workspaceActions(for: block))
+                .id(block.id)
             }
         }
     }
@@ -373,9 +398,10 @@ struct PreviewPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Selection preview").font(.headline)
-                if store.isPreviewing { ProgressView().controlSize(.small).padding(.leading, 4) }
+            HStack(alignment: .top) {
+                StepHeader(number: 4, title: "Review the proposed selection",
+                           detail: "What is kept, what is left out, and why.", done: store.currentReport != nil)
+                if store.isPreviewing { ProgressView().controlSize(.small).padding(.top, 6) }
                 Spacer()
                 Toggle("Auto-update", isOn: $autoPreview)
                     .toggleStyle(.switch).controlSize(.mini)
@@ -423,20 +449,21 @@ struct PreviewPanel: View {
 
 struct ReportView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let report: SelectionReport
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                OutcomeBanner(outcome: report.outcome)
+                StepHeader(number: 5, title: "Copy or export the prepared prompt",
+                           detail: "It contains the instructions, the included context in its original order, and the task.")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { copyButton; secondaryActions }
+                    VStack(alignment: .leading, spacing: 8) { copyButton; HStack(spacing: 8) { secondaryActions } }
+                }
                 ReportMetrics(report: report)
                 budgetBanner
-                HStack {
-                    Button { store.saveExperiment() } label: { Label("Save as Experiment", systemImage: "flask") }
-                        .buttonStyle(.dsPrimary)
-                        .help("Snapshot the inputs, settings, counter and both prompts (⇧⌘E)")
-                    Button { store.exportReport() } label: { Label("Export…", systemImage: "square.and.arrow.up") }
-                        .help("Export this report as JSON (⌘E)")
-                }
                 if let ranker = report.ranker {
                     DisclosureGroup("Ranking: \(ranker.displayName)") {
                         RankingMethodView(descriptor: ranker, taskTerms: report.taskTerms).padding(.top, 4)
@@ -446,30 +473,75 @@ struct ReportView: View {
                         Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(DS.warning)
                     }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Decisions").font(.subheadline.weight(.semibold))
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: "lock.fill").foregroundStyle(DS.accent).frame(width: 16).accessibilityHidden(true)
-                        Text("Protected instructions (first) and task (last) — kept verbatim.").font(.callout)
-                    }
-                    ForEach(report.decisions) { DecisionRow(decision: $0, tokenUnit: unit) }
-                    if report.decisions.isEmpty {
-                        Text("No context blocks.").font(.caption).foregroundStyle(.secondary)
-                    }
+                decisions
+                PromptTextView(title: "Prepared prompt (complete)", text: report.selectedPrompt, maxHeight: 420) {
+                    store.copySelectedPrompt()
                 }
-                PromptTextView(title: "Selected prompt", text: report.selectedPrompt) {
-                    store.copyToPasteboard(report.selectedPrompt, what: "the selected prompt")
-                }
-                DisclosureGroup("Full-context prompt (baseline for comparison)") {
+                DisclosureGroup("Full-context prompt (reference for comparison)") {
                     PromptTextView(title: "Full-context prompt", text: report.originalPrompt) {
                         store.copyToPasteboard(report.originalPrompt, what: "the full-context prompt")
                     }
                     .padding(.top, 6)
                 }
-                Text("Answer quality has not been evaluated. Review every removal for lost information, then save an experiment to compare answers.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Answer quality has not been evaluated. A smaller prompt can lose information the task needs: review what was left out, then save an experiment to compare answers.")
+                    .font(.caption).foregroundStyle(DS.textSecondary)
             }
             .padding(14)
+        }
+    }
+
+    private var decisions: some View {
+        let empty = report.decisions.filter { $0.kind == .emptySkipped }
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "lock.fill").foregroundStyle(DS.accent).frame(width: 16).accessibilityHidden(true)
+                Text("Protected instructions (first) and task (last) are always included verbatim.").font(.callout)
+            }
+            decisionList("Included", report.decisions.filter(\.kept))
+            decisionList("Left out", report.decisions.filter { !$0.kept && $0.kind != .emptySkipped })
+            if !empty.isEmpty {
+                Text("\(empty.count) empty block\(empty.count == 1 ? "" : "s") skipped: \(empty.map(\.title).joined(separator: ", "))")
+                    .font(.caption).foregroundStyle(DS.textTertiary)
+            }
+        }
+    }
+
+    private var copyButton: some View {
+        Button { store.copySelectedPrompt() } label: { Label("Copy Prepared Prompt", systemImage: "doc.on.doc") }
+            .buttonStyle(.dsPrimary)
+            .controlSize(.large)
+            .help("Copy the complete prepared prompt (⇧⌘C)")
+    }
+
+    @ViewBuilder private var secondaryActions: some View {
+        Button { store.exportReport() } label: { Label("Export…", systemImage: "square.and.arrow.up") }
+            .help("Export this report as JSON (⌘E)")
+        Button { store.saveExperiment() } label: { Label("Save as Experiment", systemImage: "flask") }
+            .help("Snapshot the inputs, settings, counter and both prompts (⇧⌘E)")
+    }
+
+    private func decisionList(_ title: String, _ items: [BlockDecision]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(title) (\(items.count))").dsColumnHeader()
+            if items.isEmpty {
+                Text("None.").font(.caption).foregroundStyle(DS.textTertiary)
+            }
+            ForEach(items) { decision in
+                let open = store.inspectedBlockID == decision.id
+                Button {
+                    withAnimation(DS.motion(reduceMotion)) { store.inspectedBlockID = open ? nil : decision.id }
+                } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        DecisionRow(decision: decision, tokenUnit: unit)
+                        Image(systemName: open ? "chevron.up" : "chevron.down")
+                            .font(.caption).foregroundStyle(DS.textTertiary).padding(.top, 4)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(open ? "Hides the details" : "Shows the full text and why it was \(decision.kept ? "included" : "left out")")
+                if open { BlockInspector(decision: decision) }
+            }
         }
     }
 
@@ -490,19 +562,31 @@ struct ReportView: View {
 
 struct ReportMetrics: View {
     let report: SelectionReport
+
+    private var changeValue: String {
+        let change = report.selectedTokens - report.originalTokens
+        guard change != 0 else { return "No change" }
+        guard report.originalTokens != 0 else { return "+\(change)" }
+        let percent = Double(abs(change)) / Double(report.originalTokens) * 100
+        return "\(change < 0 ? "\u{2212}" : "+")\(String(format: "%.1f", percent))%"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Label("Counted with \(report.counter.displayName)\(report.counter.kind == .approximation ? " (estimate)" : "")",
+                  systemImage: "number")
+                .font(.caption.weight(.semibold)).foregroundStyle(DS.textSecondary)
             Grid(horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
                     MetricTile(title: "Full context", value: "\(report.originalTokens)", systemImage: "text.alignleft")
-                    MetricTile(title: "Selected", value: "\(report.selectedTokens)", systemImage: "line.3.horizontal.decrease")
-                    MetricTile(title: "Est. reduction", value: percentString(report.estimatedReductionPercent),
+                    MetricTile(title: "Prepared", value: "\(report.selectedTokens)", systemImage: "line.3.horizontal.decrease")
+                    MetricTile(title: "Change", value: changeValue,
                                caption: "\(TokenChange.describe(baseline: report.originalTokens, candidate: report.selectedTokens)) · input size, not quality",
-                               systemImage: "arrow.down.right")
+                               systemImage: "plusminus")
                 }
             }
-            Text("\(report.counter.displayName). \(report.counter.scope) Not provider-reported usage and not a cost saving.")
-                .font(.caption2).foregroundStyle(.secondary)
+            Text("\(report.counter.scope) Not provider-reported usage and not a cost saving.")
+                .font(.caption2).foregroundStyle(DS.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

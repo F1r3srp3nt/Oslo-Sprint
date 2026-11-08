@@ -309,3 +309,77 @@ public struct LatestResultGate: Sendable {
     public mutating func invalidate() { generation += 1 }
     public func isLatest(_ ticket: Int) -> Bool { ticket == generation }
 }
+
+/// What a selection run actually did, in plain terms. An unchanged prompt is never described as optimised.
+public enum SelectionOutcome: Equatable, Sendable {
+    /// No context block has text: the prompt is only the task and instructions.
+    case noContext
+    /// The full-context strategy kept everything by design.
+    case fullContextRetained
+    /// A reducing strategy ran but removed nothing.
+    case nothingRemoved
+    /// Only exact duplicates were removed.
+    case duplicatesRemoved(count: Int)
+    /// Optional blocks were left out because of the budget (plus any duplicates removed).
+    case excludedForBudget(excluded: Int, duplicates: Int)
+    /// Task, instructions and required blocks alone are over the budget; they were kept intact.
+    case protectedExceedsBudget(overBy: Int, excluded: Int)
+
+    public var title: String {
+        switch self {
+        case .noContext: return "No context to optimise"
+        case .fullContextRetained: return "Full context: everything retained"
+        case .nothingRemoved: return "Nothing removed by this strategy"
+        case .duplicatesRemoved: return "Exact duplicates removed"
+        case .excludedForBudget: return "Optional context excluded for the budget"
+        case .protectedExceedsBudget: return "Protected content exceeds the budget"
+        }
+    }
+
+    public var explanation: String {
+        func blocks(_ n: Int) -> String { "\(n) optional block\(n == 1 ? "" : "s")" }
+        switch self {
+        case .noContext:
+            return "There are no context blocks with text, so the prompt is just the task and instructions."
+        case .fullContextRetained:
+            return "This strategy keeps every block. Use it as the reference when comparing answers."
+        case .nothingRemoved:
+            return "Every context block was kept, so the prepared prompt is the same as the full-context prompt."
+        case .duplicatesRemoved(let n):
+            return "\(blocks(n).capitalizedFirst) \(n == 1 ? "was a byte-for-byte copy" : "were byte-for-byte copies") of kept text. Nothing else was removed."
+        case .excludedForBudget(let excluded, let duplicates):
+            let dup = duplicates > 0 ? " \(duplicates) exact duplicate\(duplicates == 1 ? " was" : "s were") also removed." : ""
+            return "\(blocks(excluded).capitalizedFirst) did not fit the budget and \(excluded == 1 ? "was" : "were") left out whole, not shortened.\(dup) Check them for information the task needs."
+        case .protectedExceedsBudget(let overBy, _):
+            return "The task, instructions and required blocks alone are \(overBy) over the budget. They were kept intact and all optional context was left out."
+        }
+    }
+
+    /// True when the prepared prompt differs from the full-context prompt.
+    public var removedContext: Bool {
+        switch self {
+        case .noContext, .fullContextRetained, .nothingRemoved: return false
+        case .duplicatesRemoved, .excludedForBudget: return true
+        case .protectedExceedsBudget(_, let excluded): return excluded > 0
+        }
+    }
+}
+
+extension SelectionReport {
+    public var outcome: SelectionOutcome {
+        let excluded = decisions.filter { $0.kind == .excludedByBudget }.count
+        let duplicates = decisions.filter { $0.kind == .duplicateRemoved }.count
+        if budgetEnforced && protectedExceedsBudget {
+            return .protectedExceedsBudget(overBy: protectedTokens - budget, excluded: excluded)
+        }
+        if decisions.allSatisfy({ $0.kind == .emptySkipped }) { return .noContext }
+        if settings.strategy == .baseline { return .fullContextRetained }
+        if excluded > 0 { return .excludedForBudget(excluded: excluded, duplicates: duplicates) }
+        if duplicates > 0 { return .duplicatesRemoved(count: duplicates) }
+        return .nothingRemoved
+    }
+}
+
+extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}

@@ -4,13 +4,14 @@ import Foundation
 /// case where keyword ranking does badly. They are not a benchmark and prove nothing about answer quality.
 public enum DemoDataset {
     public enum ID: String, CaseIterable, Identifiable, Sendable {
-        case codingTask, requiredConstraint, paraphrasedTask
+        case codingTask, requiredConstraint, paraphrasedTask, pastedNotes
         public var id: String { rawValue }
         public var title: String {
             switch self {
             case .codingTask: return "Coding task with duplicates and noise"
             case .requiredConstraint: return "Constraint that must be marked required"
             case .paraphrasedTask: return "Paraphrased task (keyword-ranking weakness)"
+            case .pastedNotes: return "Pasted notes: a useful reduction, and a loss"
             }
         }
         public var summary: String {
@@ -21,6 +22,8 @@ public enum DemoDataset {
                 return "A refund reply where the approval rule shares only one word (“customer”) with the task. Marked required, it stays at any budget. Untick Required and it must compete: it still fits at the demo budget of 120, but at 110 it is dropped while an unrelated carrier notice is kept."
             case .paraphrasedTask:
                 return "The task and the useful notes use different words, while an unhelpful newsletter repeats the task’s words. Task relevance keeps the wrong block here."
+            case .pastedNotes:
+                return "Team notes pasted and split into blocks. At the demo budget the duplicate meeting notes and the changelog are left out while every expected fact stays. Lower the budget to 150 and the error-code section is dropped, losing the rule that 400 and 413 must never be retried."
             }
         }
     }
@@ -32,6 +35,7 @@ public enum DemoDataset {
         case .codingTask: return codingTask()
         case .requiredConstraint: return requiredConstraint()
         case .paraphrasedTask: return paraphrasedTask()
+        case .pastedNotes: return pastedNotes()
         }
     }
 
@@ -131,5 +135,71 @@ public enum DemoDataset {
                 expectedFacts: ["Mentions the unpredictable rota or scheduling",
                                 "Mentions newcomers lacking a buddy or support early on"],
                 correctnessChecks: ["Does not present the newsletter as a cause", "Uses only the provided notes"]))
+    }
+}
+
+extension DemoDataset {
+    /// Synthetic notes, pasted as one document and split with `ContextSplitter`.
+    public static let pastedNotesText = """
+    # Upload service notes
+
+    These notes collect what the team knows about the photo upload service.
+
+    ## Rate limits
+
+    The upload endpoint accepts at most 30 requests per minute per device. Requests over the limit get HTTP 429 with a Retry-After header, in seconds.
+
+    ## Error codes
+
+    - 429: too many requests; wait for Retry-After before retrying.
+    - 503: service temporarily unavailable; safe to retry with exponential backoff.
+    - 400 and 413: the request itself is wrong; never retry these.
+
+    ## Current client
+
+    ```swift
+    func upload(_ data: Data) async throws -> Receipt {
+        let request = makeRequest(data)
+
+        let (body, response) = try await session.data(for: request)
+        return try decodeReceipt(body, response)
+    }
+    ```
+
+    ## Meeting notes (week 12)
+
+    Agreed to look at retries after the release. The lunch rota and the office move were also discussed.
+
+    ## Meeting notes (week 12)
+
+    Agreed to look at retries after the release. The lunch rota and the office move were also discussed.
+
+    ## Changelog
+
+    1.4.2: fixed thumbnail colours on dark backgrounds.
+    1.4.1: updated Norwegian and Polish translations.
+    1.4.0: new onboarding screens.
+    """
+
+    static func pastedNotes() -> ProjectDocument {
+        let source = PastedSource(title: "Upload service notes", text: pastedNotesText,
+                                  importedAt: Date(timeIntervalSinceReferenceDate: 815_000_000))
+        let blocks = ContextSplitter.split(pastedNotesText).map {
+            ContextBlock(title: $0.title, text: $0.text, category: $0.category, pastedSourceID: source.id)
+        }
+        return ProjectDocument(
+            notes: notes(.pastedNotes),
+            draft: Draft(task: "Add retry handling to the upload client so that temporary failures are retried safely.",
+                         instructions: "Reply with the Swift changes only. Keep the upload(_:) signature unchanged.",
+                         blocks: blocks),
+            settings: SelectionSettings(strategy: .taskRelevance, budget: 230, deduplicateBeforeBudget: true,
+                                        counter: .approximate(bytesPerToken: 4)),
+            reviewTemplate: ReviewTemplate(
+                expectedFacts: ["Waits for Retry-After before retrying a 429",
+                                "Retries 503 with exponential backoff",
+                                "Never retries 400 or 413",
+                                "Keeps the upload(_:) signature"],
+                correctnessChecks: ["Changes compile against the shown client", "No invented endpoints or headers"]),
+            pastedSources: [source])
     }
 }

@@ -135,10 +135,16 @@ struct SettingsView: View {
             }
 
             Section("About this build") {
-                LabeledContent("Version", value: "0.4.0 · development build")
+                let build = BuildInfo.current
+                LabeledContent("Version", value: "\(build.version) (build \(build.build)) · \(build.configuration)")
+                LabeledContent("Commit", value: build.commit ?? "Not recorded (built without scripts/build-macos.sh)")
+                LabeledContent("Built", value: build.builtAt ?? (build.executableModified.map { "Executable modified \($0.formatted(date: .abbreviated, time: .standard))" } ?? "Unknown"))
+                LabeledContent("Running from") {
+                    Text(build.launchMode).font(.caption.monospaced()).textSelection(.enabled).multilineTextAlignment(.trailing)
+                }
                 LabeledContent("Project file schema", value: "\(ProjectDocument.currentSchemaVersion) (reads 1–\(ProjectDocument.currentSchemaVersion))")
                 LabeledContent("Selection engine", value: SelectionReport.currentEngineVersion)
-                Text("Distil is the working product name. Internal identifiers (package, module and bundle identifier) are unchanged. No company identity, logos, accounts or third-party code are included.")
+                Text("Distil is the working product name and the executable name. Package and module names (TokenLab*) and the bundle identifier are unchanged, so preferences, imported tokenizer files and saved projects carry over. No company identity, logos, accounts or third-party code are included.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
