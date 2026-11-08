@@ -3,4 +3,5 @@
 dist/
 .DS_Store
 *.xcuserstate
-screenshots/
+# CI screenshot output (docs/screenshots/ is committed)
+/screenshots/
