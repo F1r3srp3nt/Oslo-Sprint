@@ -26,7 +26,7 @@ struct ActivityView: View {
                     ForEach(LogChannel.allCases, id: \.self) { Text($0.rawValue.capitalized).tag(LogChannel?.some($0)) }
                 }
                 .frame(width: 220)
-                TextField("Filter", text: $search).textFieldStyle(.roundedBorder)
+                TextField("Filter", text: $search).dsInput()
                 Text("\(filtered.count) entries").font(.caption).foregroundStyle(Theme.textSecondary)
             }
             List(filtered) { event in

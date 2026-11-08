@@ -6,7 +6,7 @@ import TokenLabCore
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @EnvironmentObject private var encodings: EncodingStore
-    @AppStorage(StoredPreference.appearance) private var appearance = "System"
+    @AppStorage(StoredPreference.appearance) private var appearance = DSAppearance.futuristic.rawValue
     @AppStorage(StoredPreference.autoPreview) private var autoPreview = true
     @State private var importing: BPEEncodingID?
 
@@ -39,17 +39,19 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $appearance) {
-                    Text("Match System").tag("System")
-                    Text("Light").tag("Light")
-                    Text("Dark").tag("Dark")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+            SettingsSection("Appearance") {
+                Picker("Theme", selection: Binding(get: { DSAppearance.resolve(appearance) },
+                                                   set: { appearance = $0.rawValue })) {
+                    ForEach(DSAppearance.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
+                Text("Futuristic is the default. Match System and Light use the same layout with lighter colours.")
+                    .font(.caption).foregroundStyle(DS.textSecondary)
             }
 
-            Section {
+            SettingsSection {
                 Picker("Counter", selection: counterOption) {
                     Text("Approximate (UTF-8 bytes ÷ N)").tag(CounterOption.approximate)
                     ForEach(BPEEncodingID.allCases) { id in
@@ -78,7 +80,7 @@ struct SettingsView: View {
                 Text("Saved in the project file and recorded in every preview and experiment, so results can be reproduced. Counts never include chat message formatting or provider overhead.")
             }
 
-            Section {
+            SettingsSection {
                 ForEach(BPEEncodingID.allCases) { id in
                     EncodingRow(id: id, importing: importing == id, onImport: { importEncoding(id) }, onRemove: { remove(id) })
                 }
@@ -88,7 +90,7 @@ struct SettingsView: View {
                 Text("These vocabularies come from the open-source tiktoken project (MIT licence). They are not bundled and the app never downloads them: download a file yourself from the address shown, then import it. A file is accepted only if its SHA-256 matches the published value. Model families are listed as mapped in tiktoken 0.14.0. No offline tokenizer is published for some other providers’ current models; counting for those would need the provider’s own token-counting service through a future adapter.")
             }
 
-            Section {
+            SettingsSection {
                 RankingMethodView()
             } header: {
                 Text("Task relevance ranking")
@@ -96,13 +98,13 @@ struct SettingsView: View {
                 Text("Ranking runs locally and deterministically. It is kept separate from token counting and selection so a stronger method can replace it later; the ranker’s name and version are recorded in every report.")
             }
 
-            Section("Preview") {
+            SettingsSection("Preview") {
                 Toggle("Update the preview automatically after edits", isOn: $autoPreview)
                 Text("When off, use Prompt → Update Preview (⌘↩). Previews are always hidden as soon as inputs or settings change.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("Local data") {
+            SettingsSection("Local data") {
                 LabeledContent("Projects") {
                     Text("Only the JSON files you save. No autosave, no cloud sync.").multilineTextAlignment(.trailing)
                 }
@@ -114,7 +116,7 @@ struct SettingsView: View {
                         Button("Reset") {
                             UserDefaults.standard.removeObject(forKey: StoredPreference.appearance)
                             UserDefaults.standard.removeObject(forKey: StoredPreference.autoPreview)
-                            appearance = "System"; autoPreview = true
+                            appearance = DSAppearance.futuristic.rawValue; autoPreview = true
                             store.status = "Preferences reset."
                         }
                     }
@@ -134,7 +136,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("About this build") {
+            SettingsSection("About this build") {
                 let build = BuildInfo.current
                 LabeledContent("Version", value: "\(build.version) (build \(build.build)) · \(build.configuration)")
                 LabeledContent("Commit", value: build.commit ?? "Not recorded (built without scripts/build-macos.sh)")
@@ -147,9 +149,11 @@ struct SettingsView: View {
                 Text("Distil is the working product name and the executable name. Package and module names (TokenLab*) and the bundle identifier are unchanged, so preferences, imported tokenizer files and saved projects carry over. No company identity, logos, accounts or third-party code are included.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            }
+            .padding(20)
+            .frame(maxWidth: 860, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     private func importEncoding(_ id: BPEEncodingID) {
@@ -213,5 +217,34 @@ struct EncodingRow: View {
                 .font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// A themed panel with the same shape as a Form `Section`: title or header, content, optional footer.
+/// Replaces the grouped Form, whose native grey section boxes hid the theme.
+struct SettingsSection<Content: View, Header: View, Footer: View>: View {
+    @ViewBuilder var content: Content
+    @ViewBuilder var header: Header
+    @ViewBuilder var footer: Footer
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                content
+                footer
+                    .font(.caption)
+                    .foregroundStyle(DS.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(4)
+        } label: {
+            header
+        }
+    }
+}
+
+extension SettingsSection where Header == Text, Footer == EmptyView {
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.init(content: content, header: { Text(title) }, footer: { EmptyView() })
     }
 }

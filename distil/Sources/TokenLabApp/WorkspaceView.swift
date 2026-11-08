@@ -234,7 +234,7 @@ struct LinesEditor: View {
                     TextField(placeholder, text: Binding(
                         get: { lines.indices.contains(index) ? lines[index] : "" },
                         set: { if lines.indices.contains(index) { lines[index] = $0 } }))
-                        .textFieldStyle(.roundedBorder)
+                        .dsInput()
                     Button(role: .destructive) { if lines.indices.contains(index) { lines.remove(at: index) } } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Remove \(title.lowercased()) item")
@@ -298,7 +298,7 @@ extension SelectionSettingsPanel {
     @ViewBuilder var budgetControls: some View {
         Text("Token budget").fixedSize()
         TextField("Budget", value: budget, format: .number.grouping(.never))
-            .textFieldStyle(.roundedBorder).frame(width: 90)
+            .dsInput().frame(width: 90)
             .multilineTextAlignment(.trailing)
             .accessibilityLabel("Token budget")
         Stepper("Token budget", value: budget, in: SelectionSettings.budgetRange, step: 50).labelsHidden()
@@ -334,7 +334,7 @@ struct ContextBlockEditor: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     TextField("Title", text: $block.title)
-                        .textFieldStyle(.roundedBorder)
+                        .dsInput()
                         .font(.headline)
                         .accessibilityLabel("Context title")
                     Picker("Category", selection: $block.category) {

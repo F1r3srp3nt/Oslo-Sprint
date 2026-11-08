@@ -17,13 +17,19 @@ final class RelayAppDelegate: NSObject, NSApplicationDelegate {
 struct RelayApp: App {
     @NSApplicationDelegateAdaptor(RelayAppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
+    @AppStorage(DSAppearance.storageKey) private var appearance = DSAppearance.futuristic.rawValue
+
+    init() {
+        // Futuristic is the default; an explicit Light or Match System choice made later is kept.
+        DSAppearance.applyFuturisticDefault()
+    }
 
     var body: some Scene {
         WindowGroup("Relay") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 980, minHeight: 640)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(DSAppearance.resolve(appearance).colorScheme)
                 .tint(Theme.accent)
         }
         .windowStyle(.hiddenTitleBar)
@@ -60,19 +66,26 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: AppSection = .assistant
+    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220
 
     var body: some View {
-        // A persistent split view (not an adaptive NavigationSplitView), so the sidebar never
-        // collapses when a section needs more width. The window controls stay native.
-        HSplitView {
-            DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
-                      selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
-                sidebarFooter
+        // A plain SwiftUI sidebar beside the detail pane in one HStack (no AppKit split view or adaptive
+        // NavigationSplitView), so no section can collapse the sidebar or blank its rows.
+        // The window controls stay native.
+        GeometryReader { proxy in
+            let width = DSSidebarLayout.width(stored: sidebarWidth, windowWidth: proxy.size.width,
+                                              range: 200...300, detailMinimum: 680)
+            HStack(spacing: 0) {
+                DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map { item($0) })],
+                          selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
+                    sidebarFooter
+                }
+                .frame(width: width)
+                .frame(maxHeight: .infinity)
+                DSSidebarResizeHandle(width: $sidebarWidth, range: 200...300)
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 200, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
-            detail
-                .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(1)
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())

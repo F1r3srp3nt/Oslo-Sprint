@@ -73,7 +73,7 @@ struct PasteContextSheet: View {
     // Step A: paste and choose how to split.
     private var edit: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Name of the source", text: $title).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
+            TextField("Name of the source", text: $title).dsInput().frame(maxWidth: 360)
             CodeEditor(text: $text, minHeight: 260, maxHeight: .infinity, accessibilityLabel: "Pasted text")
             Picker("How to add it", selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
@@ -111,7 +111,7 @@ struct PasteContextSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text("\(index + 1)").font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(DS.textTertiary)
-                                    TextField("Block name", text: binding(index, \.title)).textFieldStyle(.roundedBorder)
+                                    TextField("Block name", text: binding(index, \.title)).dsInput()
                                     Picker("Category", selection: binding(index, \.category)) {
                                         ForEach(ContextCategory.allCases) { Text($0.rawValue).tag($0) }
                                     }

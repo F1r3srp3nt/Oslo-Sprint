@@ -1,4 +1,4 @@
-# Distil — native macOS prototype 0.5
+# Distil — native macOS prototype 0.6
 
 Distil helps you send a model less unnecessary context while keeping what a task needs, and then check whether the answer is still useful. It is an unbranded SwiftUI desktop app. All source is newly written for this project; no company code, logos, assets, accounts or third-party packages are included.
 
@@ -16,7 +16,7 @@ Requirements: macOS 14 or later, Xcode 15 or later (Swift 5.9+). No dependencies
 bash scripts/run-latest.sh
 ```
 
-This runs the tests and builds `dist/Distil.app` with version 0.5.0 and the current git commit and build time. If a copy of Distil is already running, it asks that copy to quit first. That matters because `open` only brings a running app to the front; it doesn't start the new build. If you cancel the quit, the script stops and launches nothing.
+This runs the tests and builds `dist/Distil.app` with version 0.6.0 and the current git commit and build time. If a copy of Distil is already running, it asks that copy to quit first. That matters because `open` only brings a running app to the front; it doesn't start the new build. If you cancel the quit, the script stops and launches nothing.
 
 **Alternatives**
 
@@ -27,6 +27,8 @@ SKIP_TESTS=1 bash scripts/build-macos.sh && open dist/Distil.app
 ```
 
 **Xcode:** open `Package.swift`, choose the **Distil** scheme and **My Mac**, then Product → Test (⌘U) or Run (⌘R).
+
+**Appearance:** the futuristic navy skin is the default, including for installations that were on the old "Match System" default. Settings → Appearance offers Futuristic, Match System and Light; an explicit choice is kept.
 
 **Confirm which build is running:** Settings (⌘,) → *About this build* shows the version, build number, configuration and git commit. It also shows the build time and where the running app was launched from. `swift run` and Xcode show "Unbundled executable" and the executable's modification time instead of a commit.
 
@@ -102,7 +104,7 @@ The other demonstrations show a mixed coding task, a constraint that must be mar
 
 ## First-launch checklist (on your Mac)
 
-1. Run `bash scripts/run-latest.sh`. Tests pass, and Settings → About shows 0.5.0 (build 5) and the current commit.
+1. Run `bash scripts/run-latest.sh`. Tests pass, and Settings → About shows 0.6.0 (build 6) and the current commit.
 2. The menu bar, Dock, window and About menu all say **Distil**. `swift run Distil` shows Distil too.
 3. **Sidebar repro:**
    - Overview → Comparison with an empty project. Then load a demonstration and go Overview → Comparison again. The sidebar rows stay visible both times.

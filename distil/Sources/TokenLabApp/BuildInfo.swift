@@ -22,7 +22,7 @@ struct BuildInfo {
         let configuration = "Release"
         #endif
         return BuildInfo(
-            version: info["CFBundleShortVersionString"] as? String ?? "0.5.0 (unbundled)",
+            version: info["CFBundleShortVersionString"] as? String ?? "0.6.0 (unbundled)",
             build: info["CFBundleVersion"] as? String ?? "development",
             commit: info["DistilGitCommit"] as? String,
             builtAt: info["DistilBuildDate"] as? String,

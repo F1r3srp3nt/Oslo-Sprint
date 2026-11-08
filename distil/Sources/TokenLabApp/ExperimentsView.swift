@@ -103,7 +103,7 @@ struct ExperimentDetail: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     TextField("Experiment name", text: $experiment.name)
-                        .textFieldStyle(.roundedBorder).font(.title3)
+                        .dsInput().font(.title3)
                         .accessibilityLabel("Experiment name")
                     Menu {
                         Button("Export Experiment…") { store.exportExperiment(experiment.id) }
@@ -242,7 +242,7 @@ struct EvaluationTab: View {
             GroupBox("Review") {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("Reviewer", text: $experiment.evaluation.reviewer)
-                        .textFieldStyle(.roundedBorder).frame(maxWidth: 280)
+                        .dsInput().frame(maxWidth: 280)
                     Text("Reviewer notes (editing notes keeps the verdict)").font(.caption).foregroundStyle(DS.textSecondary)
                     CodeEditor(text: $experiment.evaluation.reviewerNotes, minHeight: 70, maxHeight: 200, accessibilityLabel: "Reviewer notes")
                     Picker("Quality verdict", selection: verdict) {
@@ -383,13 +383,13 @@ struct RunEditor: View {
                 Text("Provider-reported usage (copied manually; optional)").font(.caption).foregroundStyle(DS.textSecondary)
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                     GridRow {
-                        TextField("Provider", text: usage(\.provider)).textFieldStyle(.roundedBorder)
-                        TextField("Model", text: usage(\.model)).textFieldStyle(.roundedBorder)
+                        TextField("Provider", text: usage(\.provider)).dsInput()
+                        TextField("Model", text: usage(\.model)).dsInput()
                     }
                     GridRow {
-                        TextField("Input tokens", text: optionalIntText(usage(\.inputTokens))).textFieldStyle(.roundedBorder)
+                        TextField("Input tokens", text: optionalIntText(usage(\.inputTokens))).dsInput()
                             .accessibilityLabel("\(title): provider-reported input tokens")
-                        TextField("Output tokens", text: optionalIntText(usage(\.outputTokens))).textFieldStyle(.roundedBorder)
+                        TextField("Output tokens", text: optionalIntText(usage(\.outputTokens))).dsInput()
                             .accessibilityLabel("\(title): provider-reported output tokens")
                     }
                 }
@@ -462,7 +462,7 @@ struct ChecksEditor: View {
                 }
                 ForEach(checks) { check in
                     HStack(spacing: 8) {
-                        TextField(placeholder, text: text(check.id)).textFieldStyle(.roundedBorder)
+                        TextField(placeholder, text: text(check.id)).dsInput()
                         resultPicker("Full", result(check.id, .fullContext))
                         resultPicker("Selected", result(check.id, .selectedContext))
                         Button(role: .destructive) { evaluation.removeCheck(id: check.id) } label: { Image(systemName: "trash") }

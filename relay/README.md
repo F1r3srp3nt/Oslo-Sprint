@@ -43,8 +43,8 @@ cd relay
 ./scripts/test.sh                      # swift build + swift test (also builds the app target)
 
 # Option A: build a proper .app (adds the microphone usage text; signs ad hoc)
-./scripts/build-app.sh
-open build/Relay.app
+./scripts/run-latest.sh                # builds build/Relay.app, quits a running Relay, opens the new copy
+# or: ./scripts/build-app.sh, quit any running Relay, then open "$PWD/build/Relay.app"
 
 # Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
 swift run Relay
@@ -117,7 +117,7 @@ key saving, account check, voice and microphone tests, cancel/restart, changes w
 pending, persistence across restarts, and the minimum window width. The short list:
 
 - [ ] `./scripts/test.sh` passes: 68 tests, and the `Relay` app target compiles.
-- [ ] `./scripts/build-app.sh && open build/Relay.app` opens a dark window with six sections.
+- [ ] `./scripts/run-latest.sh` opens the futuristic navy window with six sections; Settings → About this build shows the current commit and build time.
 - [ ] Assistant, typed `start`: the card shows Heard / Understood / Plan / Attempted / Result, and Step 1/7 has the SAFETY line first.
 - [ ] `next` asks for confirmation. `understood` and then `next` show Step 2/7.
 - [ ] Training: a Polish question about a leak (`Co zrobić, gdy widzę wyciek?`) is answered in Polish with S3 quoted, after switching the language to Polski.

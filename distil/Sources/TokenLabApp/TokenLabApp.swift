@@ -25,15 +25,17 @@ import TokenLabCore
 
     init() {
         PreferenceMigration.run()
+        DSAppearance.applyFuturisticDefault()
     }
-    @AppStorage(StoredPreference.appearance) private var appearance = "System"
+    @AppStorage(StoredPreference.appearance) private var appearance = DSAppearance.futuristic.rawValue
 
     var body: some Scene {
         Window("Distil", id: "main") {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(store.encodings)
-                .preferredColorScheme(appearance == "Dark" ? .dark : appearance == "Light" ? .light : nil)
+                .preferredColorScheme(DSAppearance.resolve(appearance).colorScheme)
+                .dsWindowChrome(DSAppearance.resolve(appearance))
                 .onAppear { delegate.store = store }
         }
         .defaultSize(width: 1240, height: 820)

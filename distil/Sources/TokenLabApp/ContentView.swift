@@ -19,12 +19,13 @@ struct ContentView: View {
         // HStack. There is no AppKit split view or adaptive NavigationSplitView at the root, so no
         // section's layout, toolbar or minimum width can collapse the sidebar or blank its rows.
         GeometryReader { proxy in
-            let width = Self.sidebarWidth(stored: sidebarWidth, windowWidth: proxy.size.width)
+            let width = DSSidebarLayout.width(stored: sidebarWidth, windowWidth: proxy.size.width,
+                                              range: Self.sidebarMinWidth...Self.sidebarMaxWidth, detailMinimum: Self.detailMinWidth)
             HStack(spacing: 0) {
                 sidebar
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
-                SidebarResizeHandle(width: $sidebarWidth, range: Self.sidebarMinWidth...Self.sidebarMaxWidth)
+                DSSidebarResizeHandle(width: $sidebarWidth, range: Self.sidebarMinWidth...Self.sidebarMaxWidth)
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -58,11 +59,6 @@ struct ContentView: View {
     static let sidebarMaxWidth: CGFloat = 280
     static let detailMinWidth: CGFloat = 560
 
-    /// The stored width, clamped to 180–280 and to whatever leaves the detail pane its minimum.
-    static func sidebarWidth(stored: Double, windowWidth: CGFloat) -> CGFloat {
-        let upper = max(sidebarMinWidth, min(sidebarMaxWidth, windowWidth - detailMinWidth - SidebarResizeHandle.thickness))
-        return min(max(CGFloat(stored), sidebarMinWidth), upper)
-    }
 
     private var sidebar: some View {
         DSSidebar(groups: sidebarGroups, selection: sectionSelection, topInset: DS.Space.s,
@@ -152,60 +148,5 @@ struct StatusBar: View {
         .background(DS.surface.opacity(0.85))
         .overlay(alignment: .top) { Rectangle().fill(DS.accent.opacity(0.16)).frame(height: 1) }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Drag to resize the sidebar. Also adjustable with VoiceOver (increment/decrement).
-struct SidebarResizeHandle: View {
-    static let thickness: CGFloat = 5
-    @Binding var width: Double
-    let range: ClosedRange<CGFloat>
-    @State private var dragStart: Double?
-    @State private var hovering = false
-    @State private var cursorPushed = false
-
-    var body: some View {
-        Rectangle()
-            .fill(Color.clear)
-            .frame(width: Self.thickness)
-            .frame(maxHeight: .infinity)
-            .overlay(Rectangle().fill(DS.accent.opacity(hovering || dragStart != nil ? 0.45 : 0.16)).frame(width: 1))
-            .contentShape(Rectangle())
-            .onHover { inside in
-                hovering = inside
-                updateCursor()
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { value in
-                        let start = dragStart ?? width
-                        dragStart = start
-                        width = clamp(start + Double(value.translation.width))
-                    }
-                    .onEnded { _ in dragStart = nil; updateCursor() }
-            )
-            .onDisappear { if cursorPushed { NSCursor.pop(); cursorPushed = false } }
-            .accessibilityElement()
-            .accessibilityLabel("Sidebar width")
-            .accessibilityValue("\(Int(width)) points")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: width = clamp(width + 10)
-                case .decrement: width = clamp(width - 10)
-                @unknown default: break
-                }
-            }
-            .help("Drag to resize the sidebar")
-    }
-
-    /// Keep the resize cursor while hovering or dragging; push and pop stay balanced.
-    private func updateCursor() {
-        let wanted = hovering || dragStart != nil
-        if wanted && !cursorPushed { NSCursor.resizeLeftRight.push(); cursorPushed = true }
-        if !wanted && cursorPushed { NSCursor.pop(); cursorPushed = false }
-    }
-
-    private func clamp(_ value: Double) -> Double {
-        min(max(value, Double(range.lowerBound)), Double(range.upperBound))
     }
 }

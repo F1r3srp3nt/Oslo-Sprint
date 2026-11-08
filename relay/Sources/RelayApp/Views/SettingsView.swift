@@ -23,6 +23,8 @@ struct SettingsView: View {
                 ModelsStep()
                 ReasoningPanel()
                 WybePanel()
+                AppearancePanel()
+                AboutBuildPanel()
             }
             .frame(maxWidth: 820, alignment: .leading)
             .padding(18)
@@ -336,7 +338,7 @@ private struct APIKeyStep: View {
             VStack(alignment: .leading, spacing: 6) {
                 AdaptiveRow {
                     SecureField(model.keySaved ? "Paste the new key" : "Paste your ElevenLabs API key", text: $keyEntry)
-                        .textFieldStyle(.roundedBorder)
+                        .dsInput()
                         .frame(minWidth: 220, maxWidth: 380)
                         .onSubmit(save)
                     Button("Save to Keychain", action: save)
@@ -428,7 +430,7 @@ private struct VoiceStep: View {
                     .font(.callout.monospaced()).textSelection(.enabled)
                 AdaptiveRow {
                     TextField("Paste a voice ID", text: $voiceDraft)
-                        .textFieldStyle(.roundedBorder)
+                        .dsInput()
                         .frame(minWidth: 220, maxWidth: 320)
                         .onSubmit(save)
                     Button("Save voice ID", action: save)
@@ -667,7 +669,7 @@ private struct OverrideField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             TextField(title, text: $text)
-                .textFieldStyle(.roundedBorder)
+                .dsInput()
                 .font(.callout.monospaced())
                 .frame(maxWidth: 360)
             if !model.isPlainIdentifier(text) {
@@ -770,6 +772,50 @@ private struct WybePanel: View {
         case .teamProvided: return "from registration"
         case .unknown: return "missing"
         case .needsDevelopment: return "needs development"
+        }
+    }
+}
+
+// MARK: - Appearance and build
+
+private struct AppearancePanel: View {
+    @AppStorage(DSAppearance.storageKey) private var appearance = DSAppearance.futuristic.rawValue
+
+    var body: some View {
+        Panel {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Appearance").font(.headline)
+                Picker("Theme", selection: Binding(get: { DSAppearance.resolve(appearance) },
+                                                   set: { appearance = $0.rawValue })) {
+                    ForEach(DSAppearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.radioGroup)
+                Text("Futuristic is the default. Match System and Light use the same layout with lighter colours.")
+                    .font(.caption).foregroundStyle(Theme.textSecondary)
+            }
+        }
+    }
+}
+
+private struct AboutBuildPanel: View {
+    var body: some View {
+        let build = RelayBuildInfo.current
+        Panel {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("About this build").font(.headline)
+                LabeledRow(label: "Version") {
+                    Text("\(build.version) (build \(build.build)) · \(build.configuration)").textSelection(.enabled)
+                }
+                LabeledRow(label: "Commit") {
+                    Text(build.commit ?? "Not recorded (built without scripts/build-app.sh)").textSelection(.enabled)
+                }
+                LabeledRow(label: "Built") {
+                    Text(build.builtAt ?? (build.executableModified.map { "Executable modified \($0.formatted(date: .abbreviated, time: .standard))" } ?? "Unknown"))
+                }
+                LabeledRow(label: "Running") {
+                    Text(build.launchMode).font(.caption.monospaced()).textSelection(.enabled)
+                }
+            }
         }
     }
 }

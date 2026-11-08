@@ -9,6 +9,10 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 swift build -c release --product Relay
 BIN="$(swift build -c release --show-bin-path)/Relay"
+# Identify this build so Settings → About this build can show which copy is running.
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if [[ -n "$(git status --porcelain -- . 2>/dev/null)" ]]; then COMMIT="$COMMIT+uncommitted"; fi
+BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 APP="build/Relay.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -25,6 +29,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
+  <key>RelayGitCommit</key><string>${COMMIT}</string>
+  <key>RelayBuildDate</key><string>${BUILT_AT}</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key>
@@ -33,5 +39,5 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 codesign --force --sign - "$APP"
-echo "Built $APP"
-echo "Run with: open $APP"
+echo "Built $APP (commit $COMMIT, built $BUILT_AT)"
+echo "Run with: bash scripts/run-latest.sh   (or quit any running Relay first, then: open \"$PWD/$APP\")"
