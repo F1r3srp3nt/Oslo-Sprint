@@ -8,3 +8,5 @@ DerivedData/
 # Runner output (may contain run history; never credentials, but keep out of git)
 runs/
 *.log
+# CI screenshot output (docs/screenshots/ is committed)
+/screenshots/

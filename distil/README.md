@@ -6,6 +6,19 @@ A smaller prompt is not automatically a better prompt. Every number names the co
 
 **Names:** the app, executable and Xcode scheme are all **Distil**. The package and modules keep their internal names (`TokenLab`, `TokenLabCore`, `TokenLabApp`), and so does the bundle identifier (`dev.tokenlab.prototype`). Preferences, imported tokenizer files and saved projects therefore carry over.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Distil Overview with an empty project: getting-started steps and the four demonstrations](docs/screenshots/01-overview-empty-project.png) | ![Distil Prompt Workspace with the Pasted notes demonstration: task, protected instructions and the proposed selection, 323 to 221 estimated tokens](docs/screenshots/03-workspace-demo.png) |
+| **Overview**, empty project: getting started and the demonstrations. | **Prompt Workspace**, *Pasted notes* demo: the selection keeps 221 of 323 estimated tokens and says what was left out. |
+| ![Distil Comparison: the same input through Full context, Exact deduplication, Manual-priority budget and Task-relevance budget](docs/screenshots/04-comparison-demo.png) | ![Distil Settings: appearance choices and token counting](docs/screenshots/07-settings-demo.png) |
+| **Comparison**: the same input through four configurations, with answer quality "Not evaluated". | **Settings**: appearance (Futuristic is the default) and token counting. |
+| ![Distil Prompt Workspace in the Light appearance](docs/screenshots/08-workspace-demo-light.png) | |
+| **Light** appearance, same workspace. | |
+
+<sub>Captured automatically by the macOS job of the Distil workflow, [run 42436936517](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42436936517), on `main` at commit `64f2ec15f4740344fee7f6802c4eb8a9a5904ee6` (version 0.5.0). The runner's screen is 1024×768, so the window is close to its minimum size. The demonstration data is synthetic.</sub>
+
 ## Build and launch the latest Distil
 
 Requirements: macOS 14 or later, Xcode 15 or later (Swift 5.9+). No dependencies, API keys or network access are needed. Run these in Terminal, inside this `distil/` folder.
@@ -109,8 +122,11 @@ The other demonstrations show a mixed coding task, a constraint that must be mar
 | `swift test` with the official tokenizer files | Linux, Swift 5.10.1 | **125 passed, 0 failed** |
 | `swift test` without tokenizer files | Linux, Swift 5.10.1 | 125 run, 3 skipped, 0 failed |
 | BPE tokenizer vs tiktoken 0.14.0 | Linux | 0 mismatches on 8,000 comparisons (tokenizer unchanged since) |
-| **SwiftUI app compiles** | — | **Not verified: needs a Mac.** Code reviewed only. |
-| **App launch, menu bar/Dock name, screens, sidebar behaviour, sheets, shortcuts, contrast** | — | **Not verified: needs a Mac** |
+| SwiftUI app compiles | macOS 15, GitHub Actions | Pass (Distil workflow, macOS job) |
+| App launches and draws each section | macOS 15, GitHub Actions | Window screenshots captured (see [Screenshots](#screenshots)) |
+| **Interaction, menu bar/Dock name, sidebar resizing, sheets, shortcuts, contrast** | — | **Not verified: needs a person on a Mac** |
+
+**CI screenshots:** the Distil workflow's macOS job launches the built app and saves window captures as the `distil-screenshots` artifact on each run: an empty project, every section with the *Pasted notes* demonstration loaded, and the workspace in Light. CI opens these screens with `--screenshot-demo <demo>` and `--screenshot-section <section>`; ordinary launches pass neither. A capture shows how a screen draws, not that it works.
 
 ## First-launch checklist (on your Mac)
 

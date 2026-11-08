@@ -70,7 +70,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selection: AppSection = .assistant
+    @State private var selection: AppSection = LaunchOptions.section ?? .assistant
     /// Sidebar width chosen by dragging the handle; clamped to what the window allows.
     @AppStorage("sidebarWidth") private var sidebarWidth: Double = 228
 
@@ -100,7 +100,6 @@ struct ContentView: View {
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
-        .task { await captureSnapshotsIfRequested() }
         .alert("Relay", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
             Button("OK", role: .cancel) { model.notice = nil }
         } message: {
@@ -167,40 +166,6 @@ struct ContentView: View {
             DSStatusRow(label: "Build", value: BuildInfo.current.summary, systemImage: "shippingbox", tone: .neutral)
         ])
         .padding(DS.Space.s)
-    }
-
-    /// CI screenshot mode (only when DS_SNAPSHOT_DIR is set): every section at normal and minimum
-    /// window size, first fresh, then with real activity (training step, an answered question, a
-    /// task and a running simulation). No network requests are made.
-    private func captureSnapshotsIfRequested() async {
-        guard DSSnapshot.isActive else { return }
-        await DSSnapshot.pause(2)
-        var entries: [DSSnapshot.Entry] = []
-        let sizes: [(String, CGSize)] = [("normal", CGSize(width: 1280, height: 820)), ("minimum", CGSize(width: 980, height: 640))]
-        for (label, size) in sizes {
-            DSSnapshot.resize(to: size)
-            for section in AppSection.allCases {
-                selection = section
-                await DSSnapshot.pause(0.9)
-                entries.append(DSSnapshot.capture("relay-\(label)-fresh-\(section.rawValue)", section: section.title,
-                                                  state: "fresh, \(label) size"))
-            }
-        }
-        DSSnapshot.resize(to: sizes[0].1)
-        model.send("start", source: .control)
-        await DSSnapshot.pause(0.5)
-        model.send("Which gloves do I need?", source: .typed)
-        model.addTask("Check the dock B lights before the night shift")
-        model.startSimulation()
-        await DSSnapshot.pause(3)
-        for section in AppSection.allCases {
-            selection = section
-            await DSSnapshot.pause(0.9)
-            entries.append(DSSnapshot.capture("relay-normal-active-\(section.rawValue)", section: section.title,
-                                              state: "with activity, normal size"))
-        }
-        model.stopSimulation()
-        DSSnapshot.finish(app: "Relay", build: BuildInfo.current.summary, entries: entries)
     }
 
     /// Same rules as `Theme.color(_: ElevenLabsReadiness)`, expressed as a tone for the status card.

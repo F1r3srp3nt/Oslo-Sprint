@@ -1,11 +1,13 @@
+![HCG × Oslo Sprint 2026 banner: "Distil + Relay — one weekend, two builds", over the Oslo waterfront at night](docs/assets/hcg-oslo-sprint-2026.png)
+
 # Oslo-Sprint
 
 Programs made during Oslo Sprint 2026. Each product is a self-contained Swift package in its own folder, and the two share no code.
 
 | Folder | Product | What it is |
 |---|---|---|
-| [`distil/`](distil/README.md) | **Distil** | macOS app that selects the context a model needs for a task. It shows every decision and compares answers from the full and the reduced prompt. |
-| [`relay/`](relay/README.md) | **Relay** | macOS technical assistant for the Wybe Night Shift, Holio warehouse and ElevenLabs side challenges, with a headless runner. |
+| [`distil/`](distil/README.md) | **Distil** | macOS app that selects the context a model needs for a task. It shows every decision and compares answers from the full and the reduced prompt. [Read the Distil README](distil/README.md) · [screenshots](distil/README.md#screenshots) |
+| [`relay/`](relay/README.md) | **Relay** | macOS technical assistant for the Wybe Night Shift, Holio warehouse and ElevenLabs side challenges, with a headless runner. [Read the Relay README](relay/README.md) · [screenshots](relay/README.md#screenshots) |
 
 Both names are working names.
 
@@ -42,7 +44,11 @@ Each product's README has full instructions, its verification status, its limita
 
 ## Status
 
-Neither macOS app has been compiled or run on a Mac yet. The core libraries and tests of both products were built and run on Linux. See each product's README for details.
+- **Linux:** the core libraries and tests of both products build and pass on Linux.
+- **macOS:** GitHub Actions also builds both macOS apps on a macOS 15 runner, launches them and saves window screenshots ([`.github/workflows/`](.github/workflows/)). The screenshots in each product README come from those runs.
+- **Not yet tested on a Mac:** interaction, speech, and accessibility have not been checked by a person on a Mac.
+
+See each product's README for details.
 
 ## Working here
 
