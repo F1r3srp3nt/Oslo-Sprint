@@ -1,0 +1,58 @@
+name: Distil
+
+on:
+  pull_request:
+    paths:
+      - "distil/**"
+      - ".github/workflows/distil.yml"
+  push:
+    branches: [main]
+    paths:
+      - "distil/**"
+      - ".github/workflows/distil.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: distil-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: distil
+
+jobs:
+  linux:
+    name: Linux — core engine and tests
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trust checkout (container runs as a different user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+
+  macos:
+    name: macOS — includes SwiftUI app target
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Build (core and the Distil app)
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Build Distil.app bundle
+        run: SKIP_TESTS=1 bash scripts/build-macos.sh
