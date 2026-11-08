@@ -102,13 +102,14 @@ input[type='range'] { padding: 0; accent-color: var(--cyan); background: transpa
 .logo { color: var(--cyan); font-size: 22px; text-shadow: 0 0 18px rgba(34, 211, 238, 0.6); }
 .brand-name { font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
 .brand-sub { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
-.title-input { max-width: 280px; background: transparent; border-color: transparent; font-weight: 600; }
+.title-input { flex: 1 1 180px; min-width: 140px; max-width: 280px; background: transparent; border-color: transparent; font-weight: 600; text-overflow: ellipsis; }
 .title-input:hover { border-color: var(--line); }
 .steps { display: flex; gap: 4px; margin: 0 auto; background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 99px; padding: 3px; }
 .step-tab { background: none; border: 0; color: var(--text-2); font: inherit; padding: 5px 14px; border-radius: 99px; cursor: pointer; display: flex; gap: 7px; align-items: center; transition: background 0.2s var(--ease), color 0.2s var(--ease); }
 .step-tab.active { background: var(--cyan-dim); color: var(--cyan-2); }
 .step-no { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid currentColor; font-size: 11px; }
-.actions { display: flex; align-items: center; gap: 6px; }
+.actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.brand, .steps { flex-shrink: 0; }
 .provider-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--text-2); border-radius: 99px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; }
 .provider-pill:hover { border-color: var(--cyan); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-left: 4px; }
@@ -193,7 +194,7 @@ input[type='range'] { padding: 0; accent-color: var(--cyan); background: transpa
 
 /* Editor */
 .editor { display: grid; grid-template-columns: 264px minmax(0, 1fr) 340px; height: 100%; min-height: 0; }
-.slide-list { border-right: 1px solid var(--line-soft); overflow: auto; padding: 12px; background: rgba(10, 22, 48, 0.5); }
+.slide-list { border-right: 1px solid var(--line-soft); overflow-y: auto; overflow-x: hidden; padding: 12px; background: rgba(10, 22, 48, 0.5); min-width: 0; }
 .list-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .mode-banner { border-radius: var(--radius-s); padding: 6px 8px; margin-bottom: 10px; }
 .mode-banner.template { background: rgba(251, 191, 36, 0.1); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.3); }
@@ -205,7 +206,8 @@ input[type='range'] { padding: 0; accent-color: var(--cyan); background: transpa
 .thumb-select { display: flex; gap: 6px; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font: inherit; text-align: left; }
 .thumb-no { font-size: 11px; width: 14px; flex: none; }
 .thumb-canvas { flex: 1; border-radius: 4px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
-.thumb-meta { display: flex; align-items: center; gap: 3px; margin: 5px 0 0 20px; flex-wrap: nowrap; min-height: 22px; }
+.thumb-meta { display: flex; align-items: center; gap: 3px; margin: 5px 0 0 20px; flex-wrap: wrap; row-gap: 4px; min-height: 22px; }
+.thumb-actions { display: flex; gap: 3px; margin-left: auto; }
 .thumb-meta .origin-badge { font-size: 9.5px; padding: 0 5px; }
 .thumb-item:not(.selected):not(:hover):not(:focus-within) .thumb-meta .btn { opacity: 0; }
 .mini { font-size: 10.5px; padding: 0 5px; border-radius: 5px; background: var(--bg-2); }
@@ -287,8 +289,15 @@ input[type='range'] { padding: 0; accent-color: var(--cyan); background: transpa
 .toast.success { border-left-color: var(--ok); }
 .toast.error { border-left-color: var(--bad); }
 
+@media (max-width: 1280px) {
+  .topbar { gap: 10px; padding: 10px 12px; }
+  .brand-sub, .brand-name { display: none; }
+  .step-tab { padding: 5px 10px; }
+}
+@media (max-width: 1150px) {
+  .editor { grid-template-columns: 220px minmax(0, 1fr) 300px; }
+}
 @media (max-width: 1100px) {
-  .editor { grid-template-columns: 200px minmax(0, 1fr) 300px; }
   .brief-grid, .setup-grid, .narration-dialog { grid-template-columns: 1fr; }
   .steps { margin: 0; }
 }

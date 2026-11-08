@@ -181,6 +181,21 @@ try {
     const labels = await win.locator('[data-testid=slide-thumb] .thumb-select').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
     assert.equal(labels.length, 6);
     assert.match(labels[2], /Edited in the desktop app/);
+    // Layout holds at the window size the OS gave us (CI runners often have small screens, which leaves the
+    // window at its 1100x700 minimum): no sideways overflow, and the title field stays usable.
+    const layout = await win.evaluate(() => {
+      const box = (sel) => document.querySelector(sel);
+      return {
+        width: window.innerWidth,
+        topbar: box('.topbar').scrollWidth - box('.topbar').clientWidth,
+        slideList: box('.slide-list').scrollWidth - box('.slide-list').clientWidth,
+        title: box('[data-testid=project-title]').getBoundingClientRect().width,
+      };
+    });
+    console.log(`    layout at ${layout.width}px: ${JSON.stringify(layout)}`);
+    assert.equal(layout.topbar, 0, 'top bar overflows sideways');
+    assert.equal(layout.slideList, 0, 'slide list overflows sideways');
+    assert.ok(layout.title >= 120, `title field too narrow (${layout.title}px)`);
     await win.screenshot({ path: join(shots, '04-editor.png') });
   });
 

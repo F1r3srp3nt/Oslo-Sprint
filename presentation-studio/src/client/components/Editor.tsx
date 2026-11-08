@@ -156,7 +156,7 @@ export function Editor({ status, gen, narration, onOpenNarration, onGoBrief }: {
                   )}
                   {ns === 'ready' && <span className="mini ok" title="Narration ready">♪</span>}
                   {ns === 'outdated' && <span className="mini warn" title="Narration outdated">♪!</span>}
-                  <span className="spacer" />
+                  <span className="thumb-actions">
                   <button className="btn icon tiny" onClick={() => move(s.id, i - 1)} disabled={i === 0} aria-label={`Move slide ${i + 1} up`} title="Move up">
                     ↑
                   </button>
@@ -169,6 +169,7 @@ export function Editor({ status, gen, narration, onOpenNarration, onGoBrief }: {
                   <button className="btn icon tiny danger" onClick={() => remove(s.id)} aria-label={`Delete slide ${i + 1}`} title="Delete">
                     ✕
                   </button>
+                  </span>
                 </div>
               </li>
             );
