@@ -146,6 +146,10 @@ jobs:
       - name: Build Presentation Studio.app, ZIP and DMG (ad hoc signed)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # electron-builder skips ALL signing on pull-request builds unless this is set, which leaves Electron's
+          # original signature on a modified bundle ("code has no resources but signature indicates they must be
+          # present"). Safe here: the identity is ad hoc ("-"); no certificates or secrets exist in this job.
+          CSC_FOR_PULL_REQUEST: "true"
         run: npm run desktop:dist:mac
       - name: Verify bundle and signature
         run: |
