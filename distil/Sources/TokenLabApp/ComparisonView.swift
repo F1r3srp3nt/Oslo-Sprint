@@ -15,8 +15,10 @@ struct ComparisonView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { store.runComparison() } label: { Label("Run Comparison", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .help("Run all four configurations on the current input (⇧⌘R)")
                 Button { store.saveComparison() } label: { Label("Save as Experiments", systemImage: "flask") }
+                    .buttonStyle(.automatic)  // native toolbar look
                     .disabled(store.currentComparison == nil)
                     .help("Save four linked, reproducible experiment snapshots")
             }

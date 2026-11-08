@@ -26,7 +26,7 @@ struct TasksView: View {
                           subtitle: "Everything Relay was asked to do or could not resolve. Every change is logged in Activity.")
             HStack {
                 TextField("New task", text: $newTitle)
-                    .dsInput()
+                    .textFieldStyle(.ds)
                     .onSubmit(add)
                 Button("Add", action: add).disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
             }

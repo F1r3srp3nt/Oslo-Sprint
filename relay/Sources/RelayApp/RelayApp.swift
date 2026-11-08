@@ -3,7 +3,12 @@ import RelayAdapters
 import RelayCore
 import SwiftUI
 
-final class RelayAppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class RelayAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Apply the stored appearance before the first window draws (Futuristic by default).
+        DSAppearance.apply(.stored)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched with `swift run` (no app bundle): become a regular foreground app.
         NSApp.setActivationPolicy(.regular)
@@ -20,8 +25,8 @@ struct RelayApp: App {
     @AppStorage(DSAppearance.storageKey) private var appearance = DSAppearance.futuristic.rawValue
 
     init() {
-        // Futuristic is the default; an explicit Light or Match System choice made later is kept.
-        DSAppearance.applyFuturisticDefault()
+        // Futuristic is the default; earlier builds always forced dark, so nothing explicit is lost.
+        DSAppearance.migrateStoredPreference()
     }
 
     var body: some Scene {
@@ -29,8 +34,8 @@ struct RelayApp: App {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 980, minHeight: 640)
-                .preferredColorScheme(DSAppearance.resolve(appearance).colorScheme)
-                .tint(Theme.accent)
+                .dsAppearance(DSAppearance.resolve(appearance))
+                .tint(DS.accent)
         }
         .windowStyle(.hiddenTitleBar)
     }
@@ -66,26 +71,24 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: AppSection = .assistant
-    @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220
 
     var body: some View {
-        // A plain SwiftUI sidebar beside the detail pane in one HStack (no AppKit split view or adaptive
-        // NavigationSplitView), so no section can collapse the sidebar or blank its rows.
-        // The window controls stay native.
-        GeometryReader { proxy in
-            let width = DSSidebarLayout.width(stored: sidebarWidth, windowWidth: proxy.size.width,
-                                              range: 200...300, detailMinimum: 680)
-            HStack(spacing: 0) {
-                DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map { item($0) })],
-                          selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
-                    sidebarFooter
-                }
-                .frame(width: width)
-                .frame(maxHeight: .infinity)
-                DSSidebarResizeHandle(width: $sidebarWidth, range: 200...300)
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // A fixed-width sidebar beside the detail pane in one HStack (no AppKit split view or
+        // adaptive NavigationSplitView), so no section can collapse or blank the sidebar. The
+        // window controls stay native.
+        HStack(spacing: 0) {
+            DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
+                      selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
+                sidebarFooter
             }
+            .frame(width: 228)
+            .frame(maxHeight: .infinity)
+            detail
+                // Themed defaults for every screen; explicit styles (primary, link, plain) win.
+                .buttonStyle(.dsSecondary)
+                .textFieldStyle(.ds)
+                .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
         }
         .background(DSBackground())
         .groupBoxStyle(DSPanelGroupBoxStyle())
@@ -140,7 +143,8 @@ struct ContentView: View {
             DSStatusRow(label: "Wybe runner", value: model.wybeRunning ? "Simulation running" : "Idle · simulation only",
                         systemImage: "testtube.2", tone: model.wybeRunning ? .simulation : .neutral),
             DSStatusRow(label: "Reasoning", value: model.reasonerName.isEmpty ? "Built-in rules" : model.reasonerName,
-                        systemImage: "list.bullet.indent", tone: .neutral)
+                        systemImage: "list.bullet.indent", tone: .neutral),
+            DSStatusRow(label: "Build", value: BuildInfo.current.summary, systemImage: "shippingbox", tone: .neutral)
         ])
         .padding(DS.Space.s)
     }

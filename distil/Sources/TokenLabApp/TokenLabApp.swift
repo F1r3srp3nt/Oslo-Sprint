@@ -5,6 +5,11 @@ import TokenLabCore
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: AppStore?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Apply the stored appearance before the first window draws (Futuristic by default).
+        DSAppearance.apply(.stored)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched with `swift run`, which starts a bare executable rather than an app bundle.
         NSApp.setActivationPolicy(.regular)
@@ -25,7 +30,9 @@ import TokenLabCore
 
     init() {
         PreferenceMigration.run()
-        DSAppearance.applyFuturisticDefault()
+        // Existing installations on "Match System" (the earlier default) move to Futuristic once;
+        // an explicit Dark or Light choice is kept.
+        DSAppearance.migrateStoredPreference()
     }
     @AppStorage(StoredPreference.appearance) private var appearance = DSAppearance.futuristic.rawValue
 
@@ -34,8 +41,7 @@ import TokenLabCore
             ContentView()
                 .environmentObject(store)
                 .environmentObject(store.encodings)
-                .preferredColorScheme(DSAppearance.resolve(appearance).colorScheme)
-                .dsWindowChrome(DSAppearance.resolve(appearance))
+                .dsAppearance(DSAppearance.resolve(appearance))
                 .onAppear { delegate.store = store }
         }
         .defaultSize(width: 1240, height: 820)

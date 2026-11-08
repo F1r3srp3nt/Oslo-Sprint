@@ -22,5 +22,5 @@ if pgrep -f "/Contents/MacOS/(Distil|TokenLab)$" >/dev/null 2>&1; then
   fi
 fi
 
-open "dist/Distil.app"
-echo "Opened $(pwd)/dist/Distil.app — check Settings → About this build for the commit and build time."
+open "$PWD/dist/Distil.app"
+echo "Opened $PWD/dist/Distil.app — the sidebar's Build card and Settings › About this build show the commit and build time."

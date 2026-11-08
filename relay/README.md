@@ -43,8 +43,10 @@ cd relay
 ./scripts/test.sh                      # swift build + swift test (also builds the app target)
 
 # Option A: build a proper .app (adds the microphone usage text; signs ad hoc)
-./scripts/run-latest.sh                # builds build/Relay.app, quits a running Relay, opens the new copy
-# or: ./scripts/build-app.sh, quit any running Relay, then open "$PWD/build/Relay.app"
+./scripts/build-app.sh
+open build/Relay.app
+
+./scripts/run-latest.sh                   # rebuild, quit any running Relay, open exactly build/Relay.app
 
 # Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
 swift run Relay
@@ -53,6 +55,18 @@ swift run Relay
 # push-to-talk — a bare executable has no Info.plist/NSMicrophoneUsageDescription, and macOS
 # terminates apps that request the microphone without one. Use Option A for voice.
 ```
+
+## Appearance (Futuristic skin)
+
+Distil and Relay share one original design: a deep navy canvas with a faint technical grid, navy
+panels with thin cyan borders, a filled teal sidebar selection with a cyan indicator, cyan breadcrumbs
+above bold page titles, cyan primary buttons with dark text, and themed fields and secondary buttons.
+**Futuristic** is the default appearance. Settings › Appearance also offers Dark (no grid or glow),
+Light and Match System. Installations that were on "Match System" move to Futuristic once; an
+explicit Dark or Light choice is kept. The sidebar's Build card shows which copy is running.
+
+The skin has not yet been viewed on a Mac. Build, launch and check it with
+`relay/docs/SKIN-VERIFICATION.md`.
 
 ## Headless runner (macOS or Linux)
 
@@ -117,7 +131,7 @@ key saving, account check, voice and microphone tests, cancel/restart, changes w
 pending, persistence across restarts, and the minimum window width. The short list:
 
 - [ ] `./scripts/test.sh` passes: 68 tests, and the `Relay` app target compiles.
-- [ ] `./scripts/run-latest.sh` opens the futuristic navy window with six sections; Settings → About this build shows the current commit and build time.
+- [ ] `./scripts/build-app.sh && open build/Relay.app` opens a dark window with six sections.
 - [ ] Assistant, typed `start`: the card shows Heard / Understood / Plan / Attempted / Result, and Step 1/7 has the SAFETY line first.
 - [ ] `next` asks for confirmation. `understood` and then `next` show Step 2/7.
 - [ ] Training: a Polish question about a leak (`Co zrobić, gdy widzę wyciek?`) is answered in Polish with S3 quoted, after switching the language to Polski.

@@ -17,7 +17,8 @@ commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 if [[ -n "$(git status --porcelain -- . 2>/dev/null)" ]]; then commit="$commit+uncommitted"; fi
 built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-rm -rf "dist/Token Lab.app"   # bundle name used by builds before 0.4
+# Older copies (for example dist/Token Lab.app from builds before 0.4, or copies elsewhere) are
+# left untouched. Only this build's own output, dist/Distil.app, is replaced.
 app_dir="$PWD/dist/Distil.app"
 rm -rf "$app_dir"
 mkdir -p "$app_dir/Contents/MacOS"
@@ -31,8 +32,8 @@ cat > "$app_dir/Contents/Info.plist" <<PLIST
 <key>CFBundleExecutable</key><string>Distil</string>
 <key>CFBundleIdentifier</key><string>dev.tokenlab.prototype</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.0</string>
-<key>CFBundleVersion</key><string>6</string>
+<key>CFBundleShortVersionString</key><string>0.5.0</string>
+<key>CFBundleVersion</key><string>5</string>
 <key>DistilGitCommit</key><string>${commit}</string>
 <key>DistilBuildDate</key><string>${built_at}</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
@@ -42,3 +43,4 @@ cat > "$app_dir/Contents/Info.plist" <<PLIST
 PLIST
 codesign --force --sign - "$app_dir"
 printf 'Built local development app: %s (commit %s, built %s)\n' "$app_dir" "$commit" "$built_at"
+printf 'Open exactly this copy with:\n  open "%s"\n' "$app_dir"

@@ -68,12 +68,19 @@ enum DS {
         reduceMotion ? nil : animation
     }
 
+    /// The canvas colour for AppKit (window background behind the title bar and toolbar).
+    static let canvasNSColor = dynamicNS(dark: (0.035, 0.059, 0.098), light: (0.925, 0.945, 0.972))
+
     private static func dynamic(dark: (CGFloat, CGFloat, CGFloat), light: (CGFloat, CGFloat, CGFloat)) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+        Color(nsColor: dynamicNS(dark: dark, light: light))
+    }
+
+    private static func dynamicNS(dark: (CGFloat, CGFloat, CGFloat), light: (CGFloat, CGFloat, CGFloat)) -> NSColor {
+        NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let c = isDark ? dark : light
             return NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: 1)
-        })
+        }
     }
 }
 
@@ -96,16 +103,20 @@ enum DSTone {
 
 // MARK: - Backgrounds and surfaces
 
-/// Near-black navy canvas with a restrained blue gradient and a very faint, static technical grid.
+/// Near-black navy canvas with a restrained blue gradient and a faint, static technical grid
+/// (grid and glow only in the Futuristic appearance; never with Increase Contrast).
 struct DSBackground: View {
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dsDecorated) private var decorated
 
     var body: some View {
         ZStack {
             DS.canvas
             LinearGradient(colors: [DS.canvasGlow, DS.canvas], startPoint: .top, endPoint: .center)
-            RadialGradient(colors: [DS.accent.opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 700)
-            if contrast != .increased { DSGrid() }
+            if decorated {
+                RadialGradient(colors: [DS.accent.opacity(0.07), .clear], center: .topLeading, startRadius: 0, endRadius: 760)
+            }
+            if decorated && contrast != .increased { DSGrid() }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
@@ -122,7 +133,7 @@ struct DSGrid: View {
             while x <= size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += spacing }
             var y: CGFloat = 0
             while y <= size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += spacing }
-            context.stroke(path, with: .color(DS.gridLine.opacity(0.07)), lineWidth: 0.5)
+            context.stroke(path, with: .color(DS.gridLine.opacity(0.075)), lineWidth: 0.5)
         }
         .allowsHitTesting(false)
     }
@@ -179,7 +190,8 @@ struct DSFieldChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollContentBackground(.hidden)
-            .background(DS.surfaceSunken, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            // Glow (Futuristic only) sits on the background shape, never on the text.
+            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(DS.surfaceSunken).dsGlow(focused))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(focused ? DS.accent.opacity(0.75) : DS.border(contrast), lineWidth: focused ? 1.5 : 1))
     }
@@ -302,7 +314,7 @@ struct DSSidebar<ID: Hashable, Footer: View>: View {
         .focusable()
         .focused($focused)
         .focusEffectDisabled()
-        .onMoveCommand { move($0) }
+        .onMoveCommand(perform: move)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sections")
     }
@@ -357,7 +369,8 @@ struct DSSidebarRow<ID: Hashable>: View {
             .padding(.trailing, 8)
             .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
                 .fill(selected ? DS.accent.opacity(contrast == .increased ? 0.36 : 0.24)
-                               : (hovering ? DS.textPrimary.opacity(0.05) : Color.clear)))
+                               : (hovering ? DS.textPrimary.opacity(0.05) : Color.clear))
+                .dsGlow(selected))
             .overlay {
                 if selected {
                     RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
@@ -367,10 +380,8 @@ struct DSSidebarRow<ID: Hashable>: View {
             .overlay(alignment: .leading) {
                 if selected {
                     Capsule().fill(DS.accent).frame(width: 3, height: 22).offset(x: -7)
-                        .shadow(color: contrast == .increased ? .clear : DS.accent.opacity(0.7), radius: 4)
                 }
             }
-            .shadow(color: selected && contrast != .increased ? DS.accent.opacity(0.18) : .clear, radius: 8)
             .overlay {
                 if selected && keyboardFocused {
                     RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
@@ -462,7 +473,6 @@ struct DSPrimaryButtonStyle: ButtonStyle {
     var tone: DSTone = .accent
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.controlSize) private var controlSize
-    @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -471,8 +481,8 @@ struct DSPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, controlSize == .small ? 10 : 14)
             .padding(.vertical, controlSize == .large ? 8 : (controlSize == .small ? 3 : 5))
             .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
-                .fill(tone.color.opacity(configuration.isPressed ? 0.75 : 1)))
-            .shadow(color: isEnabled && contrast != .increased ? tone.color.opacity(0.35) : .clear, radius: 6)
+                .fill(tone.color.opacity(configuration.isPressed ? 0.75 : 1))
+                .dsGlow(isEnabled && !configuration.isPressed, tone: tone.color))
             .opacity(isEnabled ? 1 : 0.4)
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous))
     }
@@ -529,150 +539,5 @@ struct DSStatusCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsPanel(padding: 10, raised: true)
-    }
-}
-
-// MARK: - Appearance
-
-/// App appearance. Futuristic (the dark navy skin) is the default. Light and Match System use the same
-/// components with the light token variants.
-enum DSAppearance: String, CaseIterable, Identifiable {
-    case futuristic = "Futuristic"
-    case system = "System"
-    case light = "Light"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .futuristic: return "Futuristic (dark navy)"
-        case .system: return "Match System"
-        case .light: return "Light"
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .futuristic: return .dark
-        case .light: return .light
-        case .system: return nil
-        }
-    }
-
-    static let storageKey = "appearance"
-    private static let migrationKey = "appearanceFuturisticDefaultApplied"
-
-    /// Reads a stored value. "Dark" was offered before Futuristic existed and shows the same skin.
-    static func resolve(_ stored: String) -> DSAppearance {
-        if stored == "Dark" { return .futuristic }
-        return DSAppearance(rawValue: stored) ?? .futuristic
-    }
-
-    /// Run once at launch: installations that never chose, or were on the old "Match System" default,
-    /// move to Futuristic. An explicit Light (or Dark) choice is kept. Choosing Match System again later
-    /// is respected because this runs only once.
-    static func applyFuturisticDefault(_ defaults: UserDefaults = .standard) {
-        guard !defaults.bool(forKey: migrationKey) else { return }
-        let stored = defaults.string(forKey: storageKey)
-        if stored == nil || stored == DSAppearance.system.rawValue {
-            defaults.set(DSAppearance.futuristic.rawValue, forKey: storageKey)
-        }
-        defaults.set(true, forKey: migrationKey)
-    }
-}
-
-extension View {
-    /// Navy window toolbar that matches the canvas (dark toolbar text when the scheme is dark).
-    func dsWindowChrome(_ appearance: DSAppearance) -> some View {
-        self
-            .toolbarBackground(DS.canvas, for: .windowToolbar)
-            .toolbarBackground(.visible, for: .windowToolbar)
-            .toolbarColorScheme(appearance.colorScheme, for: .windowToolbar)
-    }
-}
-
-// MARK: - Inputs
-
-/// Themed single-line input: sunken field with a fine border that turns cyan while focused.
-/// Keeps native text editing and keyboard behaviour; only the chrome is custom.
-struct DSInputModifier: ViewModifier {
-    @FocusState private var focused: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .textFieldStyle(.plain)
-            .focused($focused)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .dsFieldChrome(focused: focused, radius: DS.Radius.control)
-    }
-}
-
-extension View {
-    func dsInput() -> some View { modifier(DSInputModifier()) }
-}
-
-// MARK: - Sidebar layout
-
-/// Width rules for a persistent sidebar beside a detail pane in one HStack (no split view).
-enum DSSidebarLayout {
-    static func width(stored: Double, windowWidth: CGFloat, range: ClosedRange<CGFloat>, detailMinimum: CGFloat) -> CGFloat {
-        let upper = max(range.lowerBound, min(range.upperBound, windowWidth - detailMinimum - DSSidebarResizeHandle.thickness))
-        return min(max(CGFloat(stored), range.lowerBound), upper)
-    }
-}
-
-/// Drag to resize the sidebar. Also adjustable with VoiceOver (increment/decrement).
-struct DSSidebarResizeHandle: View {
-    static let thickness: CGFloat = 5
-    @Binding var width: Double
-    let range: ClosedRange<CGFloat>
-    @State private var dragStart: Double?
-    @State private var hovering = false
-    @State private var cursorPushed = false
-
-    var body: some View {
-        Rectangle()
-            .fill(Color.clear)
-            .frame(width: Self.thickness)
-            .frame(maxHeight: .infinity)
-            .overlay(Rectangle().fill(DS.accent.opacity(hovering || dragStart != nil ? 0.45 : 0.16)).frame(width: 1))
-            .contentShape(Rectangle())
-            .onHover { inside in
-                hovering = inside
-                updateCursor()
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { value in
-                        let start = dragStart ?? width
-                        dragStart = start
-                        width = clamp(start + Double(value.translation.width))
-                    }
-                    .onEnded { _ in dragStart = nil; updateCursor() }
-            )
-            .onDisappear { if cursorPushed { NSCursor.pop(); cursorPushed = false } }
-            .accessibilityElement()
-            .accessibilityLabel("Sidebar width")
-            .accessibilityValue("\(Int(width)) points")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: width = clamp(width + 10)
-                case .decrement: width = clamp(width - 10)
-                @unknown default: break
-                }
-            }
-            .help("Drag to resize the sidebar")
-    }
-
-    /// Keep the resize cursor while hovering or dragging; push and pop stay balanced.
-    private func updateCursor() {
-        let wanted = hovering || dragStart != nil
-        if wanted && !cursorPushed { NSCursor.resizeLeftRight.push(); cursorPushed = true }
-        if !wanted && cursorPushed { NSCursor.pop(); cursorPushed = false }
-    }
-
-    private func clamp(_ value: Double) -> Double {
-        min(max(value, Double(range.lowerBound)), Double(range.upperBound))
     }
 }

@@ -73,7 +73,7 @@ struct PasteContextSheet: View {
     // Step A: paste and choose how to split.
     private var edit: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Name of the source", text: $title).dsInput().frame(maxWidth: 360)
+            TextField("Name of the source", text: $title).textFieldStyle(.ds).frame(maxWidth: 360)
             CodeEditor(text: $text, minHeight: 260, maxHeight: .infinity, accessibilityLabel: "Pasted text")
             Picker("How to add it", selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
@@ -111,7 +111,7 @@ struct PasteContextSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text("\(index + 1)").font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(DS.textTertiary)
-                                    TextField("Block name", text: binding(index, \.title)).dsInput()
+                                    TextField("Block name", text: binding(index, \.title)).textFieldStyle(.ds)
                                     Picker("Category", selection: binding(index, \.category)) {
                                         ForEach(ContextCategory.allCases) { Text($0.rawValue).tag($0) }
                                     }
@@ -185,11 +185,11 @@ struct PastedOriginalsView: View {
                     PromptTextView(title: "Original, exactly as pasted", text: source.text, minHeight: 300, maxHeight: .infinity) {
                         store.copyToPasteboard(source.text, what: "the original “\(source.title)”")
                     }
-                    HStack { Spacer(); Button("Done") { viewing = nil }.keyboardShortcut(.defaultAction) }
+                    HStack { Spacer(); Button("Done") { viewing = nil }.buttonStyle(.dsPrimary).keyboardShortcut(.defaultAction) }
                 }
                 .padding(22)
                 .frame(minWidth: 560, idealWidth: 720, minHeight: 420, idealHeight: 600)
-                .background(DS.canvas)
+                .dsSheetContent()
             }
         }
     }
