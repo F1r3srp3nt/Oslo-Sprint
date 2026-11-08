@@ -51,6 +51,7 @@ struct WorkspaceView: View {
                     .buttonStyle(.automatic)  // native toolbar look
                     .help("Add a context block (⌥⌘N)")
                 LibraryInsertMenu()
+                    .buttonStyle(.automatic)  // native toolbar look
                 Button { store.preview() } label: { Label("Update Preview", systemImage: "arrow.clockwise") }
                     .buttonStyle(.automatic)  // native toolbar look
                     .help("Run the selection on the current inputs (⌘↩)")

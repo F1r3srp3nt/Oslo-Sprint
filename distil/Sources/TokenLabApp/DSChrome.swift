@@ -162,7 +162,9 @@ struct DSSecondaryButtonStyle: ButtonStyle {
     @Environment(\.colorSchemeContrast) private var contrast
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        // Destructive buttons keep a red reading whatever tone the style was given.
+        let tone: DSTone = configuration.role == .destructive ? .danger : self.tone
+        return configuration.label
             .font(.system(size: controlSize == .large ? 14 : (controlSize == .small ? 12 : 13), weight: .medium))
             .foregroundStyle(tone == .accent ? DS.textPrimary : tone.color)
             .padding(.horizontal, controlSize == .small ? 8 : 12)

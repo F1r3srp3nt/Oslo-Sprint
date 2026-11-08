@@ -17,8 +17,6 @@ struct ExperimentsView: View {
                         Button("Delete…", role: .destructive) { pendingDeletion = experiment }
                     }
             }
-            .scrollContentBackground(.hidden)
-            .background(DS.surface.opacity(0.45))
             .overlay {
                 if store.document.experiments.isEmpty {
                     ContentUnavailableView {
@@ -115,6 +113,7 @@ struct ExperimentDetail: View {
                     } label: {
                         Label("Actions", systemImage: "ellipsis.circle")
                     }
+                    .buttonStyle(.automatic)  // native menu button
                     .fixedSize()
                 }
                 // The date moves above the tabs when the detail pane is narrow.
