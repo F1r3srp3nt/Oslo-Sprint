@@ -70,6 +70,10 @@ it shrinks automatically if the window is too narrow.
 The skin has not yet been viewed on a Mac. Build, launch and check it with
 `relay/docs/SKIN-VERIFICATION.md`.
 
+The Relay workflow's macOS job also launches the built app and saves window captures of every
+section (and Settings in Light) as the `relay-screenshots` artifact on each run. CI opens each
+screen with `--screenshot-section <section>`; ordinary launches pass nothing.
+
 ## Headless runner (macOS or Linux)
 
 ```bash

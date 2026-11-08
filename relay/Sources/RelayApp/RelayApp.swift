@@ -70,7 +70,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selection: AppSection = .assistant
+    @State private var selection: AppSection = LaunchOptions.section ?? .assistant
     /// Sidebar width chosen by dragging the handle; clamped to what the window allows.
     @AppStorage("sidebarWidth") private var sidebarWidth: Double = 228
 

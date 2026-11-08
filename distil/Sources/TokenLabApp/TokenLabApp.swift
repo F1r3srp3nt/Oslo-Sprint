@@ -42,7 +42,10 @@ import TokenLabCore
                 .environmentObject(store)
                 .environmentObject(store.encodings)
                 .dsAppearance(DSAppearance.resolve(appearance))
-                .onAppear { delegate.store = store }
+                .onAppear {
+                    delegate.store = store
+                    LaunchOptions.apply(to: store)
+                }
         }
         .defaultSize(width: 1240, height: 820)
         .commands {

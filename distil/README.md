@@ -112,6 +112,8 @@ The other demonstrations show a mixed coding task, a constraint that must be mar
 | **SwiftUI app compiles** | — | **Not verified: needs a Mac.** Code reviewed only. |
 | **App launch, menu bar/Dock name, screens, sidebar behaviour, sheets, shortcuts, contrast** | — | **Not verified: needs a Mac** |
 
+**CI screenshots:** the Distil workflow's macOS job launches the built app and saves window captures as the `distil-screenshots` artifact on each run: an empty project, every section with the *Pasted notes* demonstration loaded, and the workspace in Light. CI opens these screens with `--screenshot-demo <demo>` and `--screenshot-section <section>`; ordinary launches pass neither. A capture shows how a screen draws, not that it works.
+
 ## First-launch checklist (on your Mac)
 
 1. Run `bash scripts/run-latest.sh`. Tests pass, and Settings → About shows 0.5.0 (build 5) and the current commit.
