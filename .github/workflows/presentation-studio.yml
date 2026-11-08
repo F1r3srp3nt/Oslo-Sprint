@@ -81,3 +81,106 @@ jobs:
           path: presentation-studio/test-output/e2e
           retention-days: 14
           if-no-files-found: ignore
+
+  desktop-linux:
+    name: Desktop app (packaged, Linux) end-to-end
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: presentation-studio/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: npm ci
+      - name: System packages (Xvfb, keyring, Chromium deps, LibreOffice)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends xvfb gnome-keyring dbus-x11 libreoffice-impress
+          npx playwright install-deps chromium
+          python -m pip install --quiet python-pptx==1.0.2
+          # Ubuntu 24.04 restricts unprivileged user namespaces, which Chromium's sandbox needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Package (electron-builder --dir)
+        run: npm run desktop:pack
+      - name: End-to-end, no secure key store (keys are session-only)
+        run: xvfb-run -a npm run test:desktop
+      - name: End-to-end, with a Secret Service keyring (keys persist encrypted)
+        run: |
+          dbus-run-session -- bash -c 'echo -n ci-keyring | gnome-keyring-daemon --unlock --components=secrets >/dev/null;
+            STUDIO_EXTRA_ARGS=--password-store=gnome-libsecret xvfb-run -a npm run test:desktop'
+      - name: Upload screenshots and exports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-studio-desktop-linux
+          path: presentation-studio/test-output/desktop
+          retention-days: 14
+          if-no-files-found: ignore
+
+  desktop-macos:
+    name: Desktop app (macOS, Apple Silicon) build, launch, end-to-end
+    runs-on: macos-15
+    timeout-minutes: 45
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: presentation-studio/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          npm ci
+          python -m pip install --quiet python-pptx==1.0.2
+      - name: Build Presentation Studio.app, ZIP and DMG (ad hoc signed)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run desktop:dist:mac
+      - name: Verify bundle and signature
+        run: |
+          APP="release/mac-arm64/Presentation Studio.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          plutil -p "$APP/Contents/Info.plist" | grep -E 'CFBundle(Name|Identifier|Executable|ShortVersionString)|LSMinimumSystemVersion|NSMicrophoneUsageDescription'
+          lipo -archs "$APP/Contents/MacOS/Presentation Studio"
+          hdiutil verify release/*.dmg
+          unzip -tq release/*-mac-arm64.zip
+      - name: Launch from LaunchServices (as Finder does) and check it stays up
+        run: bash ../.github/scripts/launch-check.sh "release/mac-arm64/Presentation Studio.app" 10
+      - name: No processes left after the launch check
+        run: |
+          sleep 2
+          if pgrep -fl "Presentation Studio.app"; then echo "processes left behind"; exit 1; fi
+      - name: End-to-end against the packaged app
+        env:
+          STUDIO_SKIP_LIBREOFFICE: "1"
+        run: npm run test:desktop
+      - name: Window screenshot of the packaged app
+        continue-on-error: true
+        env:
+          WINDOW_ID: ${{ runner.temp }}/window-id
+        run: |
+          swiftc -O ../.github/scripts/window-id.swift -o "$WINDOW_ID"
+          mkdir -p test-output/desktop/macos
+          ../.github/scripts/app-screenshot.sh "release/mac-arm64/Presentation Studio.app" test-output/desktop/macos/01-launch.png
+      - name: Upload app, screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-studio-macos
+          path: |
+            presentation-studio/release/*.dmg
+            presentation-studio/release/*-mac-arm64.zip
+            presentation-studio/test-output/desktop
+          retention-days: 14
+          if-no-files-found: warn

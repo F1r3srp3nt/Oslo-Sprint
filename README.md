@@ -2,13 +2,13 @@
 
 # Oslo-Sprint
 
-Programs made during Oslo Sprint 2026. Each product is self-contained in its own folder, and the products share no code. Distil and Relay are Swift packages; Presentation Studio is a TypeScript web app.
+Programs made during Oslo Sprint 2026. Each product is self-contained in its own folder, and the products share no code. Distil and Relay are Swift packages; Presentation Studio is a TypeScript app packaged as an Electron desktop app.
 
 | Folder | Product | What it is |
 |---|---|---|
 | [`distil/`](distil/README.md) | **Distil** | macOS app that selects the context a model needs for a task. It shows every decision and compares answers from the full and the reduced prompt. [Read the Distil README](distil/README.md) · [screenshots](distil/README.md#screenshots) |
 | [`relay/`](relay/README.md) | **Relay** | macOS technical assistant for the Wybe Night Shift, Holio warehouse and ElevenLabs side challenges, with a headless runner. [Read the Relay README](relay/README.md) · [screenshots](relay/README.md#screenshots) |
-| [`presentation-studio/`](presentation-studio/README.md) | **Presentation Studio** | Web app that turns uploaded images and a brief into an editable PowerPoint deck, with an optional spoken brief and slide narration through ElevenLabs. [Read the Presentation Studio README](presentation-studio/README.md) |
+| [`presentation-studio/`](presentation-studio/README.md) | **Presentation Studio** | Desktop app (macOS, Electron) that turns uploaded images and a brief into an editable PowerPoint deck, with an optional spoken brief and slide narration through ElevenLabs. [Read the Presentation Studio README](presentation-studio/README.md) · [macOS submission](submissions/Presentation%20Studio/MacOS/README.md) |
 
 All names are working names.
 
@@ -68,11 +68,13 @@ Downloadable test builds of both apps (zipped `.app`, ad hoc signed, kept 14 day
 ```sh
 cd presentation-studio
 npm install
-cp .env.example .env              # optional: add provider keys
-npm run dev                       # open http://127.0.0.1:5173
+npm run desktop:start             # build and open the desktop app
+npm run desktop:dist:mac          # on a Mac: release/…/Presentation Studio.app, ZIP and DMG
 npm test                          # unit and API tests
-npm run test:e2e                  # browser end-to-end test (Playwright + Chromium)
+npm run test:desktop              # end-to-end test of the packaged desktop app
 ```
+
+Install, first-launch and verification details: [`submissions/Presentation Studio/MacOS/`](submissions/Presentation%20Studio/MacOS/README.md).
 
 Each product's README has full instructions, its verification status, its limitations and a first-launch checklist.
 
@@ -81,7 +83,7 @@ Each product's README has full instructions, its verification status, its limita
 - **Linux:** the core libraries and tests of both products build and pass on Linux.
 - **macOS:** GitHub Actions also builds both macOS apps on a macOS 15 runner, launches them and saves window screenshots ([`.github/workflows/`](.github/workflows/)). The screenshots in each product README come from those runs.
 - **Not yet tested on a Mac:** interaction, speech, and accessibility have not been checked by a person on a Mac.
-- **Presentation Studio:** unit, API and browser end-to-end tests pass on Linux against mock providers, and GitHub Actions runs them on every change to `presentation-studio/` ([`presentation-studio.yml`](.github/workflows/presentation-studio.yml)). Real Anthropic and ElevenLabs calls, and opening exports in Microsoft PowerPoint, have not been verified yet.
+- **Presentation Studio:** unit, API and browser end-to-end tests pass on Linux against mock providers, and GitHub Actions runs them on every change to `presentation-studio/` ([`presentation-studio.yml`](.github/workflows/presentation-studio.yml)). The packaged desktop app passes its end-to-end test on Linux. The macOS `.app` has been built and ad-hoc signed but not yet launched on a Mac; the macOS CI job that does that has not run yet. Real Anthropic and ElevenLabs calls, and opening exports in Microsoft PowerPoint, have not been verified yet.
 
 See each product's README for details.
 

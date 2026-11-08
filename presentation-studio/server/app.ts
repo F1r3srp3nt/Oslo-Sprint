@@ -1,9 +1,10 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
+import { timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { ServerConfig } from './config';
+import { setupHint, type ServerConfig } from './config';
 import { ApiError } from './errors';
 import { createAnthropicGenerator, mapAnthropicError, type Generator } from './generation';
 import { ElevenLabsClient, type FetchLike } from './elevenlabs';
@@ -12,9 +13,37 @@ import { BriefSchema, LAYOUT_IDS } from '../src/shared/model';
 import { OutlineSchema, OutlineSlideSchema, SlideContentSchema, ImageNoteSchema } from '../src/shared/generationSchemas';
 
 export interface AppDeps {
+  /** Fixed generator (tests). When undefined, one is created from the config's Anthropic settings. */
   generator?: Generator | null;
   fetchImpl?: FetchLike;
   log?: (msg: string) => void;
+  /**
+   * Required on every /api request as the X-Studio-Token header (desktop app). The Electron
+   * main process adds it to requests from its own window, so other local programs and web
+   * pages cannot call the API (or spend the user's credits) through the loopback port.
+   */
+  apiToken?: string;
+}
+
+/** Content Security Policy for the desktop renderer: everything local; https media only for ElevenLabs voice samples. */
+export const DESKTOP_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' blob: data:",
+  "media-src 'self' blob: https:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+function sameToken(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
 }
 
 const ImageSchema = z.object({
@@ -51,57 +80,102 @@ function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
 type Handler = (req: Request, res: Response) => Promise<void>;
 const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => fn(req, res).catch(next);
 
-export function createApp(config: ServerConfig, deps: AppDeps = {}) {
+export type StudioApp = ReturnType<typeof express> & {
+  /** Replace provider settings (keys, models) without restarting; resets verification status. */
+  reconfigure(next: ServerConfig): void;
+  providerStatus(): ProviderStatus;
+};
+
+interface ProviderState {
+  config: ServerConfig;
+  generator: Generator | null;
+  eleven: ElevenLabsClient;
+  status: ProviderStatus;
+}
+
+export function createApp(initial: ServerConfig, deps: AppDeps = {}): StudioApp {
   const log = deps.log ?? ((m: string) => console.log(m));
-  const generator: Generator | null =
-    deps.generator !== undefined ? deps.generator : config.generation.provider === 'anthropic' ? createAnthropicGenerator(config.generation) : null;
-  const eleven = new ElevenLabsClient(config.elevenlabs, deps.fetchImpl);
+  const mode = initial.mode;
 
-  const status: ProviderStatus = {
-    generation: {
-      provider: generator ? 'anthropic' : 'none',
-      configured: Boolean(generator),
-      model: generator ? config.generation.model : null,
-      verified: null,
-      verifiedAt: null,
-      lastError: null,
-    },
-    elevenlabs: {
-      configured: eleven.configured,
-      verified: null,
-      verifiedAt: null,
-      lastError: null,
-      ttsModel: config.elevenlabs.ttsModel,
-      sttModel: config.elevenlabs.sttModel,
-      checks: [],
-      credits: null,
-    },
+  const build = (config: ServerConfig): ProviderState => {
+    const generator: Generator | null =
+      deps.generator !== undefined
+        ? deps.generator
+        : config.generation.provider === 'anthropic'
+          ? createAnthropicGenerator(config.generation, undefined, config.mode)
+          : null;
+    const eleven = new ElevenLabsClient(config.elevenlabs, deps.fetchImpl, config.mode);
+    return {
+      config,
+      generator,
+      eleven,
+      status: {
+        generation: {
+          provider: generator ? 'anthropic' : 'none',
+          configured: Boolean(generator),
+          model: generator ? config.generation.model : null,
+          verified: null,
+          verifiedAt: null,
+          lastError: null,
+        },
+        elevenlabs: {
+          configured: eleven.configured,
+          verified: null,
+          verifiedAt: null,
+          lastError: null,
+          ttsModel: config.elevenlabs.ttsModel,
+          sttModel: config.elevenlabs.sttModel,
+          checks: [],
+          credits: null,
+        },
+      },
+    };
   };
+  let state = build(initial);
 
-  const app = express();
+  const app = express() as StudioApp;
+  app.reconfigure = (next) => {
+    state = build({ ...next, mode });
+  };
+  app.providerStatus = () => structuredClone(state.status);
   app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    if (mode === 'desktop') res.setHeader('Content-Security-Policy', DESKTOP_CSP);
+    next();
+  });
+  if (deps.apiToken) {
+    const token = deps.apiToken;
+    app.use('/api', (req, _res, next) => {
+      const sent = req.get('x-studio-token') ?? '';
+      if (!sameToken(sent, token)) return next(new ApiError(403, 'forbidden', 'This request did not come from the Presentation Studio window.', false));
+      next();
+    });
+  }
   app.use('/api', express.json({ limit: '60mb' }));
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024, files: 1 } });
 
   app.get('/api/status', (_req, res) => {
-    res.json(status);
+    res.json(state.status);
   });
 
   // ---- Generation ---------------------------------------------------------
   const requireGenerator = () => {
-    if (!generator) {
-      throw new ApiError(503, 'generation_not_configured', 'No AI provider is configured.', false, 'Use template mode, or add ANTHROPIC_API_KEY to presentation-studio/.env and restart the server.');
+    if (!state.generator) {
+      throw new ApiError(503, 'generation_not_configured', 'No AI provider is configured.', false, `Use template mode, or: ${setupHint(mode, 'anthropic')}`);
     }
-    return generator;
+    return state.generator;
   };
 
   app.post('/api/generation/verify', wrap(async (_req, res) => {
     const g = requireGenerator();
+    const { status } = state;
     try {
       await g.verify();
       Object.assign(status.generation, { verified: true, verifiedAt: new Date().toISOString(), lastError: null });
     } catch (err) {
-      const e = mapAnthropicError(err);
+      const e = mapAnthropicError(err, mode);
       Object.assign(status.generation, { verified: false, verifiedAt: new Date().toISOString(), lastError: e.message });
     }
     res.json(status);
@@ -112,7 +186,7 @@ export function createApp(config: ServerConfig, deps: AppDeps = {}) {
     const body = parseBody(OutlineRequestSchema, req.body);
     log(`[generate] outline: ${body.images.length} image(s), ${body.brief.slideCount} slide(s)`);
     const result = await g.outline(body);
-    Object.assign(status.generation, { verified: true, verifiedAt: new Date().toISOString(), lastError: null });
+    Object.assign(state.status.generation, { verified: true, verifiedAt: new Date().toISOString(), lastError: null });
     res.json(result);
   }));
 
@@ -127,6 +201,7 @@ export function createApp(config: ServerConfig, deps: AppDeps = {}) {
 
   // ---- ElevenLabs -----------------------------------------------------------
   app.post('/api/elevenlabs/verify', wrap(async (_req, res) => {
+    const { eleven, status } = state;
     const checks: ProviderStatus['elevenlabs']['checks'] = [];
     let ok = true;
     let lastError: string | null = null;
@@ -155,13 +230,13 @@ export function createApp(config: ServerConfig, deps: AppDeps = {}) {
   }));
 
   app.get('/api/elevenlabs/voices', wrap(async (_req, res) => {
-    res.json({ voices: await eleven.listVoices() });
+    res.json({ voices: await state.eleven.listVoices() });
   }));
 
   app.post('/api/elevenlabs/tts', wrap(async (req, res) => {
     const body = parseBody(TtsSchema, req.body);
     log(`[elevenlabs] text-to-speech: ${body.text.length} characters`);
-    const out = await eleven.textToSpeech(body.voiceId, body.text, body.modelId);
+    const out = await state.eleven.textToSpeech(body.voiceId, body.text, body.modelId);
     res.setHeader('Content-Type', out.mime);
     res.setHeader('X-Narration-Model', out.model);
     res.setHeader('X-Narration-Characters', String(body.text.length));
@@ -173,14 +248,14 @@ export function createApp(config: ServerConfig, deps: AppDeps = {}) {
     if (!file || file.size === 0) throw new ApiError(400, 'bad_request', 'No recording was received.', false, 'Record again.');
     log(`[elevenlabs] speech-to-text: ${Math.round(file.size / 1024)} KB`);
     const lang = typeof req.body?.languageCode === 'string' && /^[a-z]{2,3}$/.test(req.body.languageCode) ? req.body.languageCode : undefined;
-    res.json(await eleven.speechToText(file.buffer, file.mimetype, file.originalname || 'brief.webm', lang));
+    res.json(await state.eleven.speechToText(file.buffer, file.mimetype, file.originalname || 'brief.webm', lang));
   }));
 
   app.use('/api', (_req, _res, next) => next(new ApiError(404, 'not_found', 'Unknown API route.', false)));
 
   // ---- Static client (production build) -------------------------------------
-  const dist = join(config.rootDir, 'dist');
-  if (config.production && existsSync(dist)) {
+  const dist = initial.staticDir ?? join(initial.rootDir, 'dist');
+  if ((initial.production || mode === 'desktop') && existsSync(dist)) {
     app.use(express.static(dist));
     app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(join(dist, 'index.html')));
   }
@@ -191,9 +266,10 @@ export function createApp(config: ServerConfig, deps: AppDeps = {}) {
     else if (err instanceof multer.MulterError) e = new ApiError(413, 'too_large', 'The recording is too large.', false, 'Record a shorter brief (under 50 MB).');
     else if ((err as { type?: string })?.type === 'entity.too.large') e = new ApiError(413, 'too_large', 'The request is too large.', false, 'Use fewer or smaller images.');
     else if ((err as { type?: string })?.type === 'entity.parse.failed') e = new ApiError(400, 'bad_request', 'The request body is not valid JSON.', false);
-    else e = mapAnthropicError(err);
+    else e = mapAnthropicError(err, mode);
     // Log the code and message only; never request bodies or headers (they can contain user content or keys).
     log(`[error] ${e.status} ${e.code}: ${e.message}`);
+    const { status } = state;
     if (status.elevenlabs.configured && e.code.startsWith('elevenlabs_') && ['elevenlabs_auth', 'elevenlabs_permission', 'elevenlabs_credits'].includes(e.code)) {
       status.elevenlabs.lastError = e.message;
     }

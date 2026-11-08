@@ -9,7 +9,9 @@ import { loadProject, PROJECT_EXTENSION, saveProject } from '../project/projectF
 import { emptyProject, type Project } from '../shared/model';
 import { narrationStatus } from '../shared/narration';
 import { api } from './api';
-import { downloadBytes, imageForPptx } from './images';
+import { imageForPptx } from './images';
+import { desktop, isDesktop, pickImagesNative, saveExportFile, saveProjectFile, type MenuCommand } from './desktop';
+import { useImageImport } from './useImageImport';
 import { useGeneration } from './generation';
 import { useNarration } from './narration';
 import { useStudio } from './state';
@@ -40,6 +42,7 @@ export function App() {
   const openInput = useRef<HTMLInputElement>(null);
   const gen = useGeneration();
   const narration = useNarration();
+  const importImages = useImageImport();
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -60,13 +63,29 @@ export function App() {
     return () => window.removeEventListener('beforeunload', onUnload);
   }, [dirty]);
 
-  async function onSave() {
+  // Desktop menu commands (File › Open, Save, Export…). The latest handlers are read through a ref.
+  const menuRef = useRef<(cmd: MenuCommand) => void>(() => undefined);
+  menuRef.current = (cmd) => {
+    if (busy) return;
+    if (cmd === 'new') newProject();
+    else if (cmd === 'open') void onOpenDesktop();
+    else if (cmd === 'save') void onSave(false);
+    else if (cmd === 'saveAs') void onSave(true);
+    else if (cmd === 'importImages') void onImportImages();
+    else if (cmd === 'exportPptx' && project.slides.length) void onExport('pptx');
+    else if (cmd === 'present' && project.slides.length) setPresenting(true);
+    else if (cmd === 'setup') setSetupOpen(true);
+  };
+  useEffect(() => desktop?.onMenu((cmd) => menuRef.current(cmd)), []);
+
+  async function onSave(saveAs = false) {
     setBusy('save');
     try {
       const bytes = await saveProject(project, store);
-      downloadBytes(bytes, `${slugify(project.title)}${PROJECT_EXTENSION}`, 'application/zip');
+      const name = await saveProjectFile(bytes, `${slugify(project.title)}${PROJECT_EXTENSION}`, saveAs);
+      if (!name) return;
       markSaved();
-      toast('success', 'Project saved. It contains your images, slides and narration audio.');
+      toast('success', `Saved ${name}. It contains your images, slides and narration audio.`);
     } catch (e) {
       toast('error', `Could not save: ${(e as Error).message}`);
     } finally {
@@ -74,8 +93,17 @@ export function App() {
     }
   }
 
-  async function onOpen(file: File) {
+  async function onOpenDesktop() {
+    if (!desktop) return openInput.current?.click();
     if (dirty && !confirm('Open another project? Unsaved changes in this one will be lost.')) return;
+    const r = await desktop.openProject();
+    if (r.canceled) return;
+    if ('error' in r) return toast('error', r.error);
+    await onOpen(r.bytes, true);
+  }
+
+  async function onOpen(file: File | Uint8Array, confirmed = false) {
+    if (!confirmed && dirty && !confirm('Open another project? Unsaved changes in this one will be lost.')) return;
     setBusy('open');
     try {
       const loaded = await loadProject(file);
@@ -92,7 +120,16 @@ export function App() {
   function newProject() {
     if (dirty && !confirm('Start a new project? Unsaved changes will be lost.')) return;
     replaceAll(emptyProject(), new Map());
+    void desktop?.newProject();
     setStep('sources');
+  }
+
+  async function onImportImages() {
+    const { files, rejected } = await pickImagesNative();
+    if (files.length || rejected.length) {
+      await importImages(files, rejected);
+      setStep('sources');
+    }
   }
 
   async function pptxBytes(p: Project) {
@@ -119,12 +156,12 @@ export function App() {
     setBusy('export');
     try {
       const bytes = await pptxBytes(project);
-      if (kind === 'pptx') {
-        downloadBytes(bytes, `${slugify(project.title)}.pptx`, 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-      } else {
-        downloadBytes(await buildNarrationZip(project, bytes, store), `${slugify(project.title)}-with-narration.zip`, 'application/zip');
-      }
-      toast('success', kind === 'pptx' ? 'PowerPoint exported.' : 'PowerPoint and narration exported.');
+      const name =
+        kind === 'pptx'
+          ? await saveExportFile('pptx', bytes, `${slugify(project.title)}.pptx`)
+          : await saveExportFile('zip', await buildNarrationZip(project, bytes, store), `${slugify(project.title)}-with-narration.zip`);
+      if (!name) return;
+      toast('success', kind === 'pptx' ? `PowerPoint exported: ${name}` : `PowerPoint and narration exported: ${name}`);
     } catch (e) {
       toast('error', `Export failed: ${(e as Error).message}`);
     } finally {
@@ -166,11 +203,11 @@ export function App() {
           <button className="btn ghost small" onClick={newProject}>
             New
           </button>
-          <button className="btn ghost small" onClick={() => openInput.current?.click()} disabled={busy !== null} data-testid="open-project">
+          <button className="btn ghost small" onClick={() => void onOpenDesktop()} disabled={busy !== null} data-testid="open-project" title={isDesktop ? 'Open project (⌘O)' : 'Open project'}>
             Open…
           </button>
           <input ref={openInput} type="file" accept={`${PROJECT_EXTENSION},application/zip`} hidden data-testid="open-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onOpen(f); }} />
-          <button className="btn small" onClick={onSave} disabled={busy !== null} data-testid="save-project">
+          <button className="btn small" onClick={() => void onSave()} disabled={busy !== null} data-testid="save-project" title={isDesktop ? 'Save project (⌘S)' : 'Save project'}>
             {busy === 'save' ? 'Saving…' : `Save${dirty ? ' •' : ''}`}
           </button>
           <button className="btn small" onClick={() => setNarrationOpen(true)} disabled={project.slides.length === 0}>
@@ -203,7 +240,13 @@ export function App() {
 
       {status === null && (
         <div className="banner error">
-          The local server is not reachable. Editing and export still work in this tab; generation and voice features need the server (<code>npm run dev</code>).
+          {isDesktop ? (
+            <>The built-in server is not responding. Editing and export still work; AI and voice features need it. Quit and reopen Presentation Studio.</>
+          ) : (
+            <>
+              The local server is not reachable. Editing and export still work in this tab; generation and voice features need the server (<code>npm run dev</code>).
+            </>
+          )}
         </div>
       )}
 

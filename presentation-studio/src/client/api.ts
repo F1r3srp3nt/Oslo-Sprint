@@ -9,6 +9,9 @@ import type {
   Voice,
 } from '../shared/apiTypes';
 import { validateOutline, validateSlideContent } from '../shared/generationSchemas';
+import { isDesktop } from './desktop';
+
+const RESTART_HINT = isDesktop ? 'Quit and reopen Presentation Studio.' : 'Start it with "npm run dev" in presentation-studio/, then retry.';
 
 export class ClientApiError extends Error {
   constructor(
@@ -31,7 +34,7 @@ async function handle(res: Response): Promise<Response> {
     /* ignore */
   }
   if (body?.error) throw new ClientApiError(body.error.code, body.error.message, body.error.retryable, body.error.hint, body.error.details);
-  throw new ClientApiError('http_error', `The local server returned ${res.status}.`, res.status >= 500, 'Is the Presentation Studio server running? Start it with "npm run dev".');
+  throw new ClientApiError('http_error', `The local server returned ${res.status}.`, res.status >= 500, RESTART_HINT);
 }
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
@@ -39,7 +42,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   try {
     res = await fetch(path, init);
   } catch {
-    throw new ClientApiError('server_unreachable', 'Cannot reach the Presentation Studio server.', true, 'Start it with "npm run dev" in presentation-studio/, then retry.');
+    throw new ClientApiError('server_unreachable', 'Cannot reach the Presentation Studio server.', true, RESTART_HINT);
   }
   return handle(res);
 }

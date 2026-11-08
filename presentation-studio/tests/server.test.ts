@@ -227,3 +227,57 @@ describe('ElevenLabs error mapping', () => {
     expect(mapElevenLabsError(403, null, 'tts').message).toMatch(/Text to Speech/);
   });
 });
+
+describe('desktop mode', () => {
+  const desktopConfig = (keys: { anthropic?: string; eleven?: string } = {}) => ({
+    ...loadConfig({ ANTHROPIC_API_KEY: keys.anthropic ?? '', ELEVENLABS_API_KEY: keys.eleven ?? '', ELEVENLABS_BASE_URL: mocks.elevenUrl }, { readDotenv: false }),
+    mode: 'desktop' as const,
+  });
+
+  it('requires the per-launch token on every API call and sets a strict CSP', async () => {
+    const [s, b] = await listen(createApp(desktopConfig(), { apiToken: 'launch-token-123', log: () => undefined }));
+    try {
+      const denied = await fetch(`${b}/api/status`);
+      expect(denied.status).toBe(403);
+      expect((await denied.json()).error.code).toBe('forbidden');
+      expect((await fetch(`${b}/api/status`, { headers: { 'X-Studio-Token': 'wrong-token-123' } })).status).toBe(403);
+      const ok = await fetch(`${b}/api/status`, { headers: { 'X-Studio-Token': 'launch-token-123' } });
+      expect(ok.status).toBe(200);
+      const csp = ok.headers.get('content-security-policy') ?? '';
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("connect-src 'self'");
+      expect(csp).not.toMatch(/script-src[^;]*(unsafe|https)/);
+    } finally {
+      s.close();
+    }
+  });
+
+  it('applies new keys at runtime and gives in-app setup hints', async () => {
+    const app = createApp(desktopConfig(), { log: () => undefined });
+    const [s, b] = await listen(app);
+    try {
+      let st = (await (await fetch(`${b}/api/status`)).json()) as ProviderStatus;
+      expect(st.elevenlabs.configured).toBe(false);
+      const tts = await fetch(`${b}/api/elevenlabs/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voiceId: 'mockVoice1', text: 'hi' }) });
+      const err = (await tts.json()).error;
+      expect(err.code).toBe('elevenlabs_not_configured');
+      expect(err.hint).toMatch(/Open Setup/);
+      expect(err.hint).not.toMatch(/\.env/);
+      const gen = (await (await fetch(`${b}/api/generate/outline`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brief, images: [] }) })).json()).error;
+      expect(gen.hint).toMatch(/Open Setup/);
+
+      app.reconfigure(desktopConfig({ eleven: ELEVEN_KEY }));
+      st = (await (await fetch(`${b}/api/status`)).json()) as ProviderStatus;
+      expect(st.elevenlabs).toMatchObject({ configured: true, verified: null });
+      const audio = await fetch(`${b}/api/elevenlabs/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voiceId: 'mockVoice1', text: 'hi' }) });
+      expect(audio.status).toBe(200);
+
+      app.reconfigure(desktopConfig({ eleven: 'a-different-wrong-key' }));
+      const bad = (await (await fetch(`${b}/api/elevenlabs/voices`)).json()).error;
+      expect(bad.code).toBe('elevenlabs_auth');
+      expect(bad.hint).toMatch(/save it in Setup/);
+    } finally {
+      s.close();
+    }
+  });
+});

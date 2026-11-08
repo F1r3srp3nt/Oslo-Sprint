@@ -7,7 +7,7 @@
  *   POST /v1/text-to-speech/{voice_id}  JSON: text, model_id; ?output_format=mp3_44100_128
  * Auth header: xi-api-key. The key is only read here and is never logged or returned.
  */
-import type { ServerConfig } from './config';
+import { setupHint, type ServerConfig } from './config';
 import { ApiError } from './errors';
 import type { Voice } from '../src/shared/apiTypes';
 
@@ -39,7 +39,7 @@ function detailOf(body: unknown): { status: string; message: string } {
 }
 
 /** Maps an ElevenLabs error response to a user-facing error with a next step. */
-export function mapElevenLabsError(httpStatus: number, body: unknown, context: 'voices' | 'tts' | 'stt' | 'subscription'): ApiError {
+export function mapElevenLabsError(httpStatus: number, body: unknown, context: 'voices' | 'tts' | 'stt' | 'subscription', mode: ServerConfig['mode'] = 'web'): ApiError {
   const { status, message } = detailOf(body);
   const s = status.toLowerCase();
   const m = message.toLowerCase();
@@ -56,7 +56,7 @@ export function mapElevenLabsError(httpStatus: number, body: unknown, context: '
     return new ApiError(403, 'elevenlabs_permission', `The ElevenLabs API key does not have the "${permissionFor[context]}" permission.`, false, `Edit the key's permissions at ${KEYS_URL}, then click "Verify connection" again.`);
   }
   if (httpStatus === 401) {
-    return new ApiError(401, 'elevenlabs_auth', 'ElevenLabs rejected the API key (invalid, disabled or expired).', false, `Create a new key at ${KEYS_URL}, put it in presentation-studio/.env as ELEVENLABS_API_KEY and restart the server.`);
+    return new ApiError(401, 'elevenlabs_auth', 'ElevenLabs rejected the API key (invalid, disabled or expired).', false, mode === 'desktop' ? `Create a new key at ${KEYS_URL} and save it in Setup.` : `Create a new key at ${KEYS_URL}, put it in presentation-studio/.env as ELEVENLABS_API_KEY and restart the server.`);
   }
   if (s.includes('voice_not_found') || (httpStatus === 404 && context === 'tts')) {
     return new ApiError(404, 'elevenlabs_voice_unavailable', 'The selected voice is not available to this account.', false, `Pick another voice from the list, or add it to "My Voices" at ${VOICES_URL}.`);
@@ -77,6 +77,7 @@ export class ElevenLabsClient {
   constructor(
     private cfg: ServerConfig['elevenlabs'],
     private fetchImpl: FetchLike = fetch,
+    private mode: ServerConfig['mode'] = 'web',
   ) {}
 
   get configured() {
@@ -85,7 +86,7 @@ export class ElevenLabsClient {
 
   private async request(path: string, init: RequestInit, context: 'voices' | 'tts' | 'stt' | 'subscription'): Promise<Response> {
     if (!this.cfg.apiKey) {
-      throw new ApiError(503, 'elevenlabs_not_configured', 'ElevenLabs is not configured.', false, 'Add ELEVENLABS_API_KEY to presentation-studio/.env and restart the server. See "Setup" in the app.');
+      throw new ApiError(503, 'elevenlabs_not_configured', 'ElevenLabs is not configured.', false, setupHint(this.mode, 'elevenlabs'));
     }
     let res: Response;
     try {
@@ -105,7 +106,7 @@ export class ElevenLabsClient {
       } catch {
         /* non-JSON error body */
       }
-      throw mapElevenLabsError(res.status, body, context);
+      throw mapElevenLabsError(res.status, body, context, this.mode);
     }
     return res;
   }

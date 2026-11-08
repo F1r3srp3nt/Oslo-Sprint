@@ -1,31 +1,23 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { useStudio } from '../state';
-import { ACCEPTED_TYPES, blobUrl, formatBytes, readImageFile } from '../images';
+import { ACCEPTED_TYPES, blobUrl, formatBytes } from '../images';
+import { isDesktop, pickImagesNative } from '../desktop';
+import { useImageImport } from '../useImageImport';
 
 export function SourcesStep({ onNext }: { onNext: () => void }) {
-  const { project, store, update, putBinary, dropBinary, toast } = useStudio();
+  const { project, store, update, dropBinary } = useStudio();
+  const addFiles = useImageImport();
   const [over, setOver] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const usedBy = (id: string) => project.slides.filter((s) => s.image?.assetId === id).length;
 
-  async function addFiles(files: FileList | File[]) {
-    const list = Array.from(files);
-    let added = 0;
-    for (const f of list) {
-      try {
-        const { asset, blob } = await readImageFile(f);
-        putBinary(asset.id, blob);
-        update((d) => {
-          d.assets.push(asset);
-        });
-        added++;
-      } catch (e) {
-        toast('error', (e as Error).message, 'Accepted: PNG, JPEG and WebP up to 25 MB.');
-      }
-    }
-    if (added) toast('success', `Added ${added} image${added === 1 ? '' : 's'}.`);
-  }
+  // Desktop: native multi-select dialog. Browser: the hidden file input.
+  const choose = async () => {
+    if (!isDesktop) return input.current?.click();
+    const { files, rejected } = await pickImagesNative();
+    if (files.length || rejected.length) await addFiles(files, rejected);
+  };
 
   function onDrop(e: DragEvent) {
     e.preventDefault();
@@ -73,10 +65,10 @@ export function SourcesStep({ onNext }: { onNext: () => void }) {
         }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
-        onClick={() => input.current?.click()}
+        onClick={() => void choose()}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && input.current?.click()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && void choose()}
         aria-label="Upload images"
       >
         <div className="dz-icon" aria-hidden>

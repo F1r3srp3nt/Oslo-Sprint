@@ -2,13 +2,38 @@
 
 An Oslo Sprint product (working name). You upload images and describe your topic, audience, key points and style, and it builds an **editable PowerPoint deck**. Optional ElevenLabs features let you **speak the brief** instead of typing it and **narrate slides** from their speaker notes.
 
-Presentation Studio is a standalone web app: a React + TypeScript interface and a small Node/Express backend that holds the provider keys. It shares no code with Distil or Relay.
+Presentation Studio is a **desktop app for macOS** (Electron). It opens its own window and needs no Terminal, browser, development server or separately installed Node. It can also run as a local web app for development. It shares no code with Distil or Relay.
 
 ![Editor: slide list, 16:9 preview and properties panel (synthetic sample content)](docs/screenshots/a2-editor.png)
 
-## Quick start
+## Desktop app (macOS, Apple Silicon)
 
-Requires **Node.js 22.12 or newer** (needed by Vite 8 and Vitest 5) and npm.
+**Install:** unzip `Presentation-Studio-0.1.0-mac-arm64.zip` (or open the DMG) and move **Presentation Studio.app** to Applications. The first time, Control-click the app in Finder and choose **Open**: it is ad-hoc signed and not notarized. After that, double-click it like any app.
+
+**Use:** the app opens its own window. Import images (⌘I or drag and drop), write a brief, build the deck, edit, present (⌘↵), save (⌘S, native save dialog) and export PowerPoint (⌘E). Provider keys are optional and entered in **Setup** (⌘, or the *AI · Voice* button): no `.env` file is used. Keys are stored encrypted with the macOS Keychain.
+
+Full install, data-location, security and verification details: [`submissions/Presentation Studio/MacOS/`](../submissions/Presentation%20Studio/MacOS/README.md).
+
+**Build the app** (from `presentation-studio/`, after `npm install`):
+
+| Goal | Command |
+|---|---|
+| Run the desktop app from source | `npm run desktop:start` |
+| `.app` + ZIP + DMG, on a Mac | `npm run desktop:dist:mac` → `release/` |
+| `.app` + ZIP, cross-built on Linux (needs `rcodesign`) | `npm run desktop:dist:mac-on-linux` → `release/` |
+| Package for the current OS (test build) | `npm run desktop:pack` |
+| End-to-end test of the packaged app | `npm run test:desktop` (Linux: `xvfb-run -a npm run test:desktop`) |
+
+**How the desktop app is put together:**
+- `desktop/main.ts` (Electron main process) runs the Express backend *inside the app process* on `127.0.0.1` with an OS-chosen port, so it starts and stops with the app. It also adds a per-launch API token to the app window's own requests and locks down the window.
+- `desktop/preload.ts` exposes a small bridge (native dialogs, credentials, menu commands) and nothing else. Every request is validated in `desktop/ipc.ts`.
+- `desktop/settings.ts` stores keys with Electron `safeStorage`.
+- `scripts/build-desktop.mjs` bundles everything (Vite renderer, esbuild main and backend), so the packaged app ships no `node_modules`.
+- `electron-builder.yml` holds the packaging configuration.
+
+## Developer mode (local web app)
+
+Requires **Node.js 22.12 or newer** (needed by Vite 8 and Vitest 5) and npm. This mode runs in a browser tab and reads provider keys from `.env`. The desktop app does neither.
 
 ```bash
 cd presentation-studio
@@ -28,28 +53,21 @@ Edit `.env` if you want AI generation or voice features (see [Configuration](#co
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. The API server runs on http://127.0.0.1:8787, and Vite proxies `/api` to it.
-
-To run a production build from one port:
-
-```bash
-npm run build
-```
-
-```bash
-npm start
-```
-
-Then open http://127.0.0.1:8787.
+Open http://127.0.0.1:5173. The API server runs on http://127.0.0.1:8787, and Vite proxies `/api` to it. (`npm run build` + `npm start` serves a production web build on one port.)
 
 | Script | What it does |
 |---|---|
-| `npm run dev` | API server (auto-restart) + Vite dev server |
-| `npm run build` | Type-checks the client and server, then builds the client into `dist/` |
-| `npm start` | Serves `dist/` and the API on one port (`PORT`, default 8787) |
+| `npm run desktop:start` | Builds and opens the desktop app from source |
+| `npm run desktop:dist:mac` | macOS `.app`, ZIP and DMG (run on a Mac) |
+| `npm run desktop:dist:mac-on-linux` | macOS `.app` and ZIP, built and ad-hoc signed on Linux |
+| `npm run desktop:pack` | Unpacked desktop build for the current OS |
+| `npm run test:desktop` | End-to-end test of the packaged desktop app (Playwright + Electron) |
+| `npm run dev` | Web mode: API server (auto-restart) + Vite dev server |
+| `npm run build` | Type-checks, then builds the web client into `dist/` |
+| `npm start` | Web mode: serves `dist/` and the API on one port (`PORT`, default 8787) |
 | `npm test` | Unit and API tests (Vitest) |
-| `npm run test:e2e` | Browser end-to-end test (Playwright + Chromium, mock providers) |
-| `npm run typecheck` | TypeScript only |
+| `npm run test:e2e` | Browser end-to-end test of web mode (Playwright + Chromium, mock providers) |
+| `npm run typecheck` | TypeScript only (client, server, desktop) |
 | `npm run samples` | Regenerates the synthetic sample images in `samples/` |
 | `./scripts/check-no-secrets.sh` | Fails if a `.env` file or something that looks like a real API key is tracked by git |
 
@@ -68,7 +86,9 @@ Deck themes: clean light, executive dark, futuristic cyan. They are kept separat
 
 ## Configuration
 
-All configuration lives in `presentation-studio/.env`, which git ignores. Copy `.env.example`.
+**Desktop app:** everything is configured in **Setup** inside the app. Keys are encrypted with `safeStorage` (macOS Keychain), and model names are kept in `~/Library/Application Support/Presentation Studio/settings.json`. The desktop app never reads `.env`. If the system has no secure store (for example Linux without a keyring), keys are kept for the session only and never written to disk.
+
+**Developer (web) mode:** configuration lives in `presentation-studio/.env`, which git ignores. Copy `.env.example`.
 
 | Variable | Purpose | Default |
 |---|---|---|
@@ -118,7 +138,7 @@ ElevenLabs handles **transcription and narration**. The generation model handles
 
 1. Sign in at [elevenlabs.io](https://elevenlabs.io/app) and open [Settings → API keys](https://elevenlabs.io/app/settings/api-keys). Create a key. (ElevenLabs notes that creating personal keys requires a full seat in a workspace.)
 2. If you restrict the key's endpoints, allow **Text to Speech**, **Speech to Text** and reading **Voices**. Reading **User** is optional: it lets the app show your credit balance. You can also give the key a **credit limit**.
-3. Put the key in `.env` as `ELEVENLABS_API_KEY=…` and restart the server.
+3. **Desktop app:** paste the key into **Setup** and click **Save key**. **Developer mode:** put it in `.env` as `ELEVENLABS_API_KEY=…` and restart the server.
 4. Open **Setup → Verify connection**. This lists voices and reads your credit balance, which costs no credits. It does **not** test speech-to-text or text-to-speech, because each test call would use credits; those are checked on first use.
 5. Open **Narration**, play voice samples and choose a voice. To use more voices, add them to *My Voices* from the [Voice Library](https://elevenlabs.io/app/voice-library).
 
@@ -156,39 +176,60 @@ Authentication uses the `xi-api-key` header. Sources: [authentication](https://e
 
 **Tested in this repository (Linux, Node 22, Chromium 1.63 via Playwright, LibreOffice):**
 
-- `npm test` runs 45 unit and API tests: layout bounds, text fit and overflow, fit/fill/crop geometry, template mode, outline validation, narration outdated detection, project round-trip (byte-identical images and audio), `.pptx` structure (slide size, text boxes, bullets, notes, unstretched images, crop), narration ZIP and mapping, every server route against **mock** Anthropic and ElevenLabs servers, ElevenLabs error mapping, and that keys are not logged.
+- `npm test` runs 47 unit and API tests: layout bounds, text fit and overflow, fit/fill/crop geometry, template mode, outline validation, narration outdated detection, project round-trip (byte-identical images and audio), `.pptx` structure (slide size, text boxes, bullets, notes, unstretched images, crop), narration ZIP and mapping, every server route against **mock** Anthropic and ElevenLabs servers, ElevenLabs error mapping, that keys are not logged, and the desktop API token gate, CSP and runtime key changes.
 - `npm run test:e2e` runs 25 browser steps in two runs. **Run A** has no providers. It uploads PNG, JPEG and WebP images, then reorders, captions and removes images. It builds a template deck; edits text, notes, layout, fill, zoom and crop; adds, duplicates, deletes and reorders slides; checks the overflow warning; saves the project and reopens it in a fresh page; and exports a `.pptx`, which is checked with python-pptx and converted by LibreOffice. **Run B** uses **mock** providers. It checks "key configured" against "connection verified"; records a spoken brief through Chromium's fake microphone, then transcribes, edits and uses it; checks the AI disclosure, generation and progress; regenerates one slide; chooses and previews a voice; narrates after confirmation; checks outdated detection; checks the unavailable-voice error; narrates the whole deck; checks presentation mode playback, pause and navigation; checks the ZIP export; and checks that the keys appear nowhere in the browser, storage, files or logs.
 - Exported decks open in **python-pptx 1.0.2** and convert in **LibreOffice**, and the preview and the LibreOffice render match (screenshot above).
+- `npm run test:desktop` drives the **packaged desktop app** (electron-builder output) through 15 checks. It passed both without a secure key store and with a Secret Service keyring. The checks cover:
+  - its own window and the built-in backend on an OS-chosen port, with no dev server running;
+  - renderer isolation, and the API refusing outside callers;
+  - setup guidance when keys are missing;
+  - native-dialog image import, save, reopen and PPTX export;
+  - presentation mode;
+  - in-app keys (against mocks), stored encrypted or session-only;
+  - the startup-error page;
+  - single instance;
+  - quit stops the backend and leaves no processes.
 
-**CI:** [`.github/workflows/presentation-studio.yml`](../.github/workflows/presentation-studio.yml) runs on every pull request and push to `main` that touches `presentation-studio/`. One job runs the secret check, type-check, unit/API tests and build. A second job runs the browser end-to-end test with Chromium, python-pptx and LibreOffice, and uploads the screenshots and exported files as an artifact. CI uses only the mock providers: it has no keys and makes no paid calls.
+  The macOS bundle was cross-built and ad-hoc signed on Linux; it was **not launched on a Mac**. See [`submissions/Presentation Studio/MacOS/`](../submissions/Presentation%20Studio/MacOS/README.md#verification).
+
+**CI:** [`.github/workflows/presentation-studio.yml`](../.github/workflows/presentation-studio.yml) runs on every pull request and push to `main` that touches `presentation-studio/`. One job runs the secret check, type-check, unit/API tests and build. A second job runs the browser end-to-end test with Chromium, python-pptx and LibreOffice, and uploads the screenshots and exported files as an artifact. Two desktop jobs follow:
+- `desktop-linux` packages the app and runs `test:desktop` with and without a keyring.
+- `desktop-macos` builds the `.app`, ZIP and DMG on a macOS 15 Apple Silicon runner. It verifies the signature, launches the app through LaunchServices, runs `test:desktop` against it and captures a window screenshot.
+
+The desktop jobs were added with the desktop app and have **not run yet**. CI uses only the mock providers: it has no keys and makes no paid calls.
 
 **Not verified:**
 
 - **Real Anthropic and ElevenLabs calls.** No real keys were available, so all provider traffic was tested against local mock servers that follow the documented request and response shapes. Model output quality, real prompt-injection resistance, real error bodies, and the exact permission names in the ElevenLabs key dashboard have not been checked.
 - **Microsoft PowerPoint and Keynote.** The `.pptx` has only been opened with python-pptx and LibreOffice. Font metrics in PowerPoint can differ slightly from the preview.
+- **The desktop app on a real Mac:** Finder launch, Gatekeeper with the ad-hoc signature, Keychain, the microphone prompt, native menus and the DMG. These need a Mac; see the `desktop-macos` CI job.
 - Real microphones, Safari and Firefox recording formats, and browsers other than Chromium.
 - Very large decks or images (performance), and accessibility with a screen reader.
 
 ## Limitations
 
-- A single user on one machine: there are no accounts, no autosave and no undo. Save the project with **Save** (the app warns before you close a tab with unsaved changes).
+- A single user on one machine: there are no accounts, no autosave and no undo. Save the project with **Save** (the app warns before you close a window or tab with unsaved changes).
+- The macOS app is ad-hoc signed, not signed with an Apple Developer ID and not notarized, so the first launch needs Control-click › Open. It is built for Apple Silicon only.
+- `npm audit` reports 6 moderate advisories, all from one `minimatch` ReDoS issue inside electron-builder's build tooling (GHSA-g3hv-75wg-m249). They affect only the packaging step on the build machine; `npm audit --omit=dev` reports 0, and none of that code ships in the app.
 - Text fitting is an estimate shared by the preview and the export. It errs toward smaller text, but unusual fonts or scripts can still wrap differently in PowerPoint.
 - Template mode is deliberately simple: one point per slide title, with images spread over the middle slides.
-- The server listens on `127.0.0.1` only and has no authentication. Do not expose it to a network.
+- In developer (web) mode the server listens on `127.0.0.1` only and has no authentication; do not expose it to a network. The desktop app's built-in server also listens only on `127.0.0.1` and requires a per-launch token.
 
 ## Folder layout
 
 ```
 presentation-studio/
+  desktop/           Electron main process, preload bridge, IPC handlers, settings/keys, startup page, icon
+  electron-builder.yml  Desktop packaging configuration
   server/            Express API: config, Anthropic generation, ElevenLabs client, error mapping
   src/shared/        Slide model, layouts/render, text fit, image geometry, themes, schemas
   src/export/        PptxGenJS export and narration ZIP (browser + Node)
   src/project/       .pstudio save/open
   src/client/        React app (steps, editor, dialogs, presentation mode)
   tests/             Vitest unit and API tests (+ fixtures)
-  e2e/               Playwright end-to-end test and mock providers
+  e2e/               Playwright end-to-end tests (web and packaged desktop app) and mock providers
   samples/           Synthetic sample images (labelled "SYNTHETIC SAMPLE")
-  scripts/           Sample generator, python-pptx inspector
+  scripts/           Desktop build/packaging, icon and sample generators, python-pptx inspector, secret check
   docs/screenshots/  Screenshots from the e2e run (synthetic/mock content)
 ```
 
