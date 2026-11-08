@@ -51,22 +51,22 @@ dependencies, and does not use or touch `distil/` (Distil).
 ## Build and run on a Mac
 
 ```bash
+# Every script works from any folder and starts with a read-only check of the developer tools.
+bash relay/scripts/check-prereqs.sh --tests  # macOS, Swift, developer directory, SDK, XCTest; prints exact fixes
+bash relay/scripts/run-latest.sh             # package, quit any running Relay, open exactly build/Relay.app
+bash relay/scripts/run-latest.sh --test      # same, but run the tests first and stop if they fail
+
 cd relay
+./scripts/test.sh                      # swift build + swift test; reports run/skipped/failed (needs Xcode's XCTest)
+./scripts/build-app.sh                 # package only (microphone usage text, ad-hoc signed); no test targets
 ./scripts/verify-macos.sh --launch-check   # build + tests + Relay.app + launch check → build/verify-macos.log
-./scripts/test.sh                      # swift build + swift test (also builds the app target)
 
-# Option A: build a proper .app (adds the microphone usage text; signs ad hoc)
-./scripts/build-app.sh
-open build/Relay.app
-
-./scripts/run-latest.sh                   # rebuild, quit any running Relay, open exactly build/Relay.app
-
-# Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
+# Or run straight from SwiftPM in Terminal (no bundle; mic permission is asked for Terminal)
 swift run Relay
 
 # Xcode: opening Package.swift and running the "Relay" scheme works for everything except
 # push-to-talk — a bare executable has no Info.plist/NSMicrophoneUsageDescription, and macOS
-# terminates apps that request the microphone without one. Use Option A for voice.
+# terminates apps that request the microphone without one. Use Relay.app (run-latest.sh or build-app.sh) for voice.
 ```
 
 ## Appearance (Futuristic skin)
