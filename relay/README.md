@@ -21,7 +21,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 | ![Relay Settings in the Light appearance](docs/screenshots/07-settings-light.png) | |
 | **Light** appearance, Settings. | |
 
-<sub>Captured automatically by the macOS job of the Relay workflow, [run 42436936531](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42436936531), on `main` at commit `64f2ec15f4740344fee7f6802c4eb8a9a5904ee6` (version 0.2.0), on a fresh install: no API key, no tasks and no simulation run. The window is at its minimum size (980 points wide).</sub>
+<sub>Captured automatically by the macOS job of the Relay workflow, [run 42441559881](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42441559881), on `main` at commit `b5d86974e7c789523b46df8a8184f768c06b212c` (version 0.2.0), on a fresh install: no API key, no tasks and no simulation run. The window is at its minimum size (980 points wide).</sub>
 
 ## Status of the first milestone
 

@@ -17,7 +17,7 @@ A smaller prompt is not automatically a better prompt. Every number names the co
 | ![Distil Prompt Workspace in the Light appearance](docs/screenshots/08-workspace-demo-light.png) | |
 | **Light** appearance, same workspace. | |
 
-<sub>Captured automatically by the macOS job of the Distil workflow, [run 42436936517](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42436936517), on `main` at commit `64f2ec15f4740344fee7f6802c4eb8a9a5904ee6` (version 0.5.0). The runner's screen is 1024×768, so the window is close to its minimum size. The demonstration data is synthetic.</sub>
+<sub>Captured automatically by the macOS job of the Distil workflow, [run 42441559779](https://github.com/F1r3srp3nt/Oslo-Sprint/actions/runs/42441559779), on `main` at commit `b5d86974e7c789523b46df8a8184f768c06b212c` (version 0.5.0). The runner's screen is 1024×768, so the window is close to its minimum size. The demonstration data is synthetic.</sub>
 
 ## Build and launch the latest Distil
 
