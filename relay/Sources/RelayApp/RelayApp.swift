@@ -3,7 +3,12 @@ import RelayAdapters
 import RelayCore
 import SwiftUI
 
-final class RelayAppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class RelayAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Apply the stored appearance before the first window draws (Futuristic by default).
+        DSAppearance.apply(.stored)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched with `swift run` (no app bundle): become a regular foreground app.
         NSApp.setActivationPolicy(.regular)
@@ -17,14 +22,20 @@ final class RelayAppDelegate: NSObject, NSApplicationDelegate {
 struct RelayApp: App {
     @NSApplicationDelegateAdaptor(RelayAppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
+    @AppStorage(DSAppearance.storageKey) private var appearance = DSAppearance.futuristic.rawValue
+
+    init() {
+        // Futuristic is the default; earlier builds always forced dark, so nothing explicit is lost.
+        DSAppearance.migrateStoredPreference()
+    }
 
     var body: some Scene {
         WindowGroup("Relay") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 980, minHeight: 640)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
+                .dsAppearance(DSAppearance.resolve(appearance))
+                .tint(DS.accent)
         }
         .windowStyle(.hiddenTitleBar)
     }
@@ -62,15 +73,20 @@ struct ContentView: View {
     @State private var selection: AppSection = .assistant
 
     var body: some View {
-        // A persistent split view (not an adaptive NavigationSplitView), so the sidebar never
-        // collapses when a section needs more width. The window controls stay native.
-        HSplitView {
+        // A fixed-width sidebar beside the detail pane in one HStack (no AppKit split view or
+        // adaptive NavigationSplitView), so no section can collapse or blank the sidebar. The
+        // window controls stay native.
+        HStack(spacing: 0) {
             DSSidebar(groups: [DSSidebarGroup(title: "Workspace", items: AppSection.allCases.map(item))],
                       selection: $selection, topInset: 30, brandName: "RELAY", brandTagline: "Challenge assistant") {
                 sidebarFooter
             }
-            .frame(minWidth: 200, idealWidth: 220, maxWidth: 300, maxHeight: .infinity)
+            .frame(width: 228)
+            .frame(maxHeight: .infinity)
             detail
+                // Themed defaults for every screen; explicit styles (primary, link, plain) win.
+                .buttonStyle(.dsSecondary)
+                .textFieldStyle(.ds)
                 .frame(minWidth: 680, maxWidth: .infinity, maxHeight: .infinity)
                 .layoutPriority(1)
         }
@@ -128,7 +144,8 @@ struct ContentView: View {
             DSStatusRow(label: "Wybe runner", value: model.wybeRunning ? "Simulation running" : "Idle · simulation only",
                         systemImage: "testtube.2", tone: model.wybeRunning ? .simulation : .neutral),
             DSStatusRow(label: "Reasoning", value: model.reasonerName.isEmpty ? "Built-in rules" : model.reasonerName,
-                        systemImage: "list.bullet.indent", tone: .neutral)
+                        systemImage: "list.bullet.indent", tone: .neutral),
+            DSStatusRow(label: "Build", value: BuildInfo.current.summary, systemImage: "shippingbox", tone: .neutral)
         ])
         .padding(DS.Space.s)
     }

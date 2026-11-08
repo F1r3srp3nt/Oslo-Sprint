@@ -68,12 +68,19 @@ enum DS {
         reduceMotion ? nil : animation
     }
 
+    /// The canvas colour for AppKit (window background behind the title bar and toolbar).
+    static let canvasNSColor = dynamicNS(dark: (0.035, 0.059, 0.098), light: (0.925, 0.945, 0.972))
+
     private static func dynamic(dark: (CGFloat, CGFloat, CGFloat), light: (CGFloat, CGFloat, CGFloat)) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+        Color(nsColor: dynamicNS(dark: dark, light: light))
+    }
+
+    private static func dynamicNS(dark: (CGFloat, CGFloat, CGFloat), light: (CGFloat, CGFloat, CGFloat)) -> NSColor {
+        NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             let c = isDark ? dark : light
             return NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: 1)
-        })
+        }
     }
 }
 
@@ -96,16 +103,20 @@ enum DSTone {
 
 // MARK: - Backgrounds and surfaces
 
-/// Near-black navy canvas with a restrained blue gradient and a very faint, static technical grid.
+/// Near-black navy canvas with a restrained blue gradient and a faint, static technical grid
+/// (grid and glow only in the Futuristic appearance; never with Increase Contrast).
 struct DSBackground: View {
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dsDecorated) private var decorated
 
     var body: some View {
         ZStack {
             DS.canvas
             LinearGradient(colors: [DS.canvasGlow, DS.canvas], startPoint: .top, endPoint: .center)
-            RadialGradient(colors: [DS.accent.opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 700)
-            if contrast != .increased { DSGrid() }
+            if decorated {
+                RadialGradient(colors: [DS.accent.opacity(0.07), .clear], center: .topLeading, startRadius: 0, endRadius: 760)
+            }
+            if decorated && contrast != .increased { DSGrid() }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
@@ -122,7 +133,7 @@ struct DSGrid: View {
             while x <= size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += spacing }
             var y: CGFloat = 0
             while y <= size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += spacing }
-            context.stroke(path, with: .color(DS.gridLine.opacity(0.055)), lineWidth: 0.5)
+            context.stroke(path, with: .color(DS.gridLine.opacity(0.075)), lineWidth: 0.5)
         }
         .allowsHitTesting(false)
     }
@@ -179,7 +190,8 @@ struct DSFieldChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollContentBackground(.hidden)
-            .background(DS.surfaceSunken, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            // Glow (Futuristic only) sits on the background shape, never on the text.
+            .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(DS.surfaceSunken).dsGlow(focused))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(focused ? DS.accent.opacity(0.75) : DS.border(contrast), lineWidth: focused ? 1.5 : 1))
     }
@@ -357,7 +369,8 @@ struct DSSidebarRow<ID: Hashable>: View {
             .padding(.trailing, 8)
             .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
                 .fill(selected ? DS.accent.opacity(contrast == .increased ? 0.36 : 0.24)
-                               : (hovering ? DS.textPrimary.opacity(0.05) : Color.clear)))
+                               : (hovering ? DS.textPrimary.opacity(0.05) : Color.clear))
+                .dsGlow(selected))
             .overlay {
                 if selected {
                     RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
@@ -468,7 +481,8 @@ struct DSPrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, controlSize == .small ? 10 : 14)
             .padding(.vertical, controlSize == .large ? 8 : (controlSize == .small ? 3 : 5))
             .background(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous)
-                .fill(tone.color.opacity(configuration.isPressed ? 0.75 : 1)))
+                .fill(tone.color.opacity(configuration.isPressed ? 0.75 : 1))
+                .dsGlow(isEnabled && !configuration.isPressed, tone: tone.color))
             .opacity(isEnabled ? 1 : 0.4)
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.control, style: .continuous))
     }

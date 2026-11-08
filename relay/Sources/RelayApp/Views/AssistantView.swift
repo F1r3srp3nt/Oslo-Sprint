@@ -341,7 +341,7 @@ struct InputBar: View {
                 .dsFieldChrome(focused: focused)
                 if model.isSpeaking {
                     Button { model.stopSpeaking() } label: { Label("Stop playback", systemImage: "stop.fill") }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.dsSecondary)
                         .keyboardShortcut(".", modifiers: .command)
                 }
                 Button(action: send) { Label("Send", systemImage: "arrow.up.circle.fill") }
