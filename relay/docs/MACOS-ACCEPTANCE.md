@@ -12,10 +12,15 @@ cd relay
 ./scripts/verify-macos.sh --launch-check
 ```
 
-This writes `relay/build/verify-macos.log` with toolchain versions, the full `swift build` output
-(including the SwiftUI app target), `swift test`, the `Relay.app` bundle build, code-signature and
-Info.plist checks, and a 6-second launch check. The log contains no keys. **Send that file back.**
-If a stage fails, its compiler errors are in the log.
+This writes `relay/build/verify-macos.log` with toolchain versions and the output of each stage,
+each reported separately:
+- the prerequisite check;
+- `scripts/test.sh`: source build, test compilation, test run;
+- `scripts/package.sh`: `Relay.app`, signature and Info.plist checks;
+- `scripts/verify-launch.sh`: the packaged app opens with `--self-check` and reports what it loaded.
+
+Tests that could not run are reported as NOT RUN, not as a failure of the app. The log contains no
+keys. **Send that file back.** If a stage fails, its compiler errors are in the log.
 
 ## B. Guided setup (manual, in the app)
 

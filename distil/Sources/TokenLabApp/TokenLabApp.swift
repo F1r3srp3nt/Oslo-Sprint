@@ -14,6 +14,7 @@ import TokenLabCore
         // Needed when launched with `swift run`, which starts a bare executable rather than an app bundle.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        LaunchSelfCheck.runIfRequested()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

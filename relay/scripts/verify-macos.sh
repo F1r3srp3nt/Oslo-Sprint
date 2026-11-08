@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # macOS build verification for Relay. Writes everything to build/verify-macos.log.
 #
-#   ./scripts/verify-macos.sh                 # toolchain, swift build (incl. app), swift test, Relay.app bundle
-#   ./scripts/verify-macos.sh --launch-check  # also opens Relay.app for ~6 s to confirm it starts, then quits it
+#   ./scripts/verify-macos.sh                 # prerequisites, tests, Relay.app bundle (each reported separately)
+#   ./scripts/verify-macos.sh --launch-check  # also opens Relay.app with --self-check to confirm it starts, then it quits
 #
 # It never reads the Keychain, never prints credentials and makes no ElevenLabs requests
 # (Relay makes none at launch; speech tests only run from buttons in the app).
@@ -34,6 +34,9 @@ run() {
   local status=$?
   if [[ $status -eq 0 ]]; then
     SUMMARY+=("PASS  $label")
+  elif [[ $status -eq 3 ]]; then
+    SUMMARY+=("NOT RUN  $label (a prerequisite is missing; see the log)")
+    FAILED=1
   else
     SUMMARY+=("FAIL  $label (exit $status)")
     FAILED=1
@@ -53,32 +56,16 @@ section "Environment"
   echo "uncommitted changes under relay/:"; git status --short -- . 2>&1
 } >> "$LOG" 2>&1
 
-run "swift build (core, adapters, runner and the Relay app)" swift build
-run "swift test" swift test
-run "scripts/build-app.sh (release Relay.app)" ./scripts/build-app.sh
-
-if [[ -d build/Relay.app ]]; then
-  run "codesign --verify build/Relay.app" codesign --verify --verbose build/Relay.app
-  run "Info.plist has NSMicrophoneUsageDescription" \
-      /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" build/Relay.app/Contents/Info.plist
-fi
+run "Prerequisites for packaging (scripts/check-prerequisites.sh)" scripts/check-prerequisites.sh package
+run "Tests (scripts/test.sh: source build, test compilation, test run)" scripts/test.sh
+run "Packaging (scripts/package.sh: release Relay.app, no tests)" scripts/package.sh
 
 if [[ $LAUNCH_CHECK -eq 1 && -d build/Relay.app ]]; then
-  section "Launch check"
-  open build/Relay.app >> "$LOG" 2>&1
-  sleep 6
-  if pgrep -x Relay >/dev/null; then
-    echo "Relay process is running after 6 s." >> "$LOG"
-    SUMMARY+=("PASS  App launched and stayed running for 6 s")
-    osascript -e 'tell application "Relay" to quit' >> "$LOG" 2>&1 || true
-  else
-    echo "Relay process was NOT running after 6 s. Recent crash reports:" >> "$LOG"
-    ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i relay | head -3 >> "$LOG"
-    SUMMARY+=("FAIL  App launch (process not running after 6 s)")
-    FAILED=1
-  fi
+  run "Launch verification (scripts/verify-launch.sh)" scripts/verify-launch.sh
 elif [[ $LAUNCH_CHECK -eq 0 ]]; then
-  SUMMARY+=("SKIP  App launch (run with --launch-check)")
+  SUMMARY+=("SKIP  Launch verification (run with --launch-check)")
+else
+  SUMMARY+=("SKIP  Launch verification (no Relay.app was packaged)")
 fi
 
 section "Summary"

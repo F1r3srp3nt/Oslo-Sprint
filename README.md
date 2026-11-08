@@ -23,8 +23,9 @@ Both names are working names.
 
 ```sh
 cd distil
-swift test                       # core tests
-bash scripts/run-latest.sh       # build dist/Distil.app, quit any running copy, open the new one
+scripts/check-prerequisites.sh test  # what this Mac has and lacks; changes nothing
+scripts/run-latest.sh            # package dist/Distil.app, quit any running copy, open the new one
+scripts/test.sh                  # build, compile the tests, run them (tests need full Xcode)
 swift run Distil                 # run from SwiftPM (macOS)
 ```
 
@@ -34,11 +35,15 @@ In Xcode, open `distil/Package.swift` and run the **Distil** scheme. The interna
 
 ```sh
 cd relay
-./scripts/test.sh                # swift build + swift test
-./scripts/build-app.sh           # local build/Relay.app with microphone usage text
-swift run Relay                  # run the app from Terminal (macOS)
+scripts/check-prerequisites.sh test  # what this Mac has and lacks; changes nothing
+scripts/run-latest.sh            # package build/Relay.app (microphone usage text included) and open it
+scripts/test.sh                  # build, compile the tests, run them (macOS or Linux)
 swift run relay-runner help      # headless runner (macOS or Linux)
 ```
+
+Packaging (`scripts/package.sh`) never compiles the tests, and every script names the stage that
+failed. Commands, failure messages, bundle contents and CI artifacts: [`docs/BUILDING.md`](docs/BUILDING.md).
+For HCG Executable Maker: [`docs/MAKER-HANDOFF.md`](docs/MAKER-HANDOFF.md).
 
 Each product's README has full instructions, its verification status, its limitations and a first-launch checklist.
 

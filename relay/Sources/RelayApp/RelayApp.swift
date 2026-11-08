@@ -13,6 +13,7 @@ import SwiftUI
         // Needed when launched with `swift run` (no app bundle): become a regular foreground app.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        LaunchSelfCheck.runIfRequested()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

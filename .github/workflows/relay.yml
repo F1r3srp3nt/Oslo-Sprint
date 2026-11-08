@@ -37,10 +37,8 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Toolchain
         run: swift --version
-      - name: Build
-        run: swift build
-      - name: Test
-        run: swift test
+      - name: Tests (source build, test compilation, test run)
+        run: scripts/test.sh
       - name: Runner smoke tests (simulation only; no network)
         run: |
           BIN="$(swift build --show-bin-path)/relay-runner"
@@ -54,24 +52,52 @@ jobs:
         run: ./scripts/check-no-secrets.sh
 
   macos:
-    name: macOS — includes SwiftUI app target
+    name: macOS — tests, Relay.app package, launch check
     runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Toolchain
+      - name: Prerequisites (toolchain, SDK, XCTest)
+        id: prereq
+        run: scripts/check-prerequisites.sh test
+      - name: Tests (source build, test compilation, test run)
+        id: tests
+        run: scripts/test.sh
+      # Packaging compiles only the Relay product, never the tests, so it runs even if a test failed.
+      - name: Package Relay.app (release, ad hoc signed)
+        id: package
+        if: ${{ !cancelled() }}
+        run: scripts/package.sh
+      - name: Launch check (opens the packaged app with --self-check)
+        id: launch
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: |
-          xcodebuild -version
-          swift --version
-      - name: Build (core, adapters, runner and the Relay app)
-        run: swift build
-      - name: Test
-        run: swift test
-      - name: Build Relay.app bundle
-        run: ./scripts/build-app.sh
+          scripts/verify-launch.sh
+          cat build/logs/launch-report.json
+      - name: Zip Relay.app for download
+        id: zip
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: |
+          name="Relay-$(git rev-parse --short HEAD)-macos-$(uname -m)"
+          mkdir -p upload
+          ditto -c -k --sequesterRsrc --keepParent build/Relay.app "upload/$name.zip"
+          cp build/logs/launch-report.json upload/ 2>/dev/null || true
+          (cd upload && shasum -a 256 "$name.zip" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          # Round trip: the zipped app must unpack with a valid signature.
+          mkdir -p "$RUNNER_TEMP/unzip" && ditto -x -k "upload/$name.zip" "$RUNNER_TEMP/unzip"
+          codesign --verify --strict --verbose=1 "$RUNNER_TEMP/unzip/Relay.app"
+      # Unsigned-by-Apple development build (ad hoc signature): a CI artifact, not a release.
+      - name: Upload Relay.app
+        if: ${{ !cancelled() && steps.zip.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-app-macos
+          path: relay/upload/
+          retention-days: 14
       # Window captures of the built app, for checking the look without a Mac. Download them from the
       # run's Artifacts. Not a test: a capture problem doesn't fail the job.
       - name: Screenshots
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         continue-on-error: true
         env:
           WINDOW_ID: ${{ runner.temp }}/window-id
@@ -93,3 +119,17 @@ jobs:
           path: relay/screenshots/
           if-no-files-found: warn
           retention-days: 14
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Relay: macOS results ($(git rev-parse --short HEAD))"
+            echo "| Stage | Outcome |"
+            echo "|---|---|"
+            echo "| Prerequisites | ${{ steps.prereq.outcome }} |"
+            echo "| Tests | ${{ steps.tests.outcome }} |"
+            echo "| App build and packaging | ${{ steps.package.outcome }} |"
+            echo "| Launch check | ${{ steps.launch.outcome }} |"
+            echo "| Downloadable app (artifact relay-app-macos) | ${{ steps.zip.outcome }} |"
+            grep -h 'Executed [0-9]* tests' build/logs/test.log 2>/dev/null | tail -1 | sed 's/^[[:space:]]*/Tests: /'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -27,7 +27,7 @@ dependencies, and does not use or touch `distil/` (Distil).
 
 | Part | State |
 |---|---|
-| Core engine (tasks, log, redaction, runner, training) | Builds; 68 XCTests pass on Linux (Swift 6.0.3) |
+| Core engine (tasks, log, redaction, runner, training) | Builds; 93 XCTests pass on Linux (Swift 6.0.3) |
 | `relay-runner` CLI | Builds and runs on Linux; should be identical on macOS |
 | Warehouse training (text) | Complete and deterministic, with a **synthetic** procedure in en / nb / pl |
 | Wybe Night Shift | **Simulation only.** The live protocol hasn't been obtained, and live mode sends nothing |
@@ -38,10 +38,15 @@ dependencies, and does not use or touch `distil/` (Distil).
 
 `.github/workflows/relay.yml` runs on pull requests and pushes to `main` that touch `relay/`:
 
-- **Linux** (`swift:6.0-noble`): build, the 68 tests, runner smoke tests (simulation only, no
-  network) and the credential check.
-- **macOS** (`macos-15`): build, including the SwiftUI app target, plus tests and the
-  `Relay.app` bundle.
+- **Linux** (`swift:6.0-noble`): `scripts/test.sh` (build, test compilation, the 93 tests),
+  runner smoke tests (simulation only, no network) and the credential check.
+- **macOS** (`macos-15`), each as its own step:
+  - prerequisites;
+  - tests;
+  - packaging `Relay.app`;
+  - a launch check (`--self-check`);
+  - the zipped app as the `relay-app-macos` artifact. This is a CI artifact, not a release.
+  - screenshots.
 
 ## Requirements
 
@@ -52,14 +57,14 @@ dependencies, and does not use or touch `distil/` (Distil).
 
 ```bash
 cd relay
-./scripts/verify-macos.sh --launch-check   # build + tests + Relay.app + launch check → build/verify-macos.log
-./scripts/test.sh                      # swift build + swift test (also builds the app target)
+scripts/check-prerequisites.sh test       # macOS, developer directory, Swift, SDK, XCTest; prints fixes, changes nothing
+scripts/run-latest.sh                     # package build/Relay.app, quit any running Relay, open exactly that copy
+scripts/test.sh                           # source build, test compilation, test run (no packaging)
+scripts/package.sh                        # build/Relay.app only, with the microphone usage text; never compiles tests
+scripts/verify-launch.sh                  # open the packaged app with --self-check and check its report
+scripts/verify-macos.sh --launch-check    # all of the above, logged to build/verify-macos.log
 
-# Option A: build a proper .app (adds the microphone usage text; signs ad hoc)
-./scripts/build-app.sh
-open build/Relay.app
-
-./scripts/run-latest.sh                   # rebuild, quit any running Relay, open exactly build/Relay.app
+# Option A: the packaged .app above (`scripts/build-app.sh` is the old name of scripts/package.sh)
 
 # Option B: run straight from SwiftPM in Terminal (mic permission is asked for Terminal)
 swift run Relay
@@ -149,8 +154,8 @@ The full step-by-step sequence for the guided speech setup is in `docs/MACOS-ACC
 key saving, account check, voice and microphone tests, cancel/restart, changes while a request is
 pending, persistence across restarts, and the minimum window width. The short list:
 
-- [ ] `./scripts/test.sh` passes: 68 tests, and the `Relay` app target compiles.
-- [ ] `./scripts/build-app.sh && open build/Relay.app` opens a dark window with six sections.
+- [ ] `scripts/test.sh` passes: 93 tests, and the `Relay` app target compiles.
+- [ ] `scripts/run-latest.sh` reports LAUNCHED and opens a dark window with six sections.
 - [ ] Assistant, typed `start`: the card shows Heard / Understood / Plan / Attempted / Result, and Step 1/7 has the SAFETY line first.
 - [ ] `next` asks for confirmation. `understood` and then `next` show Step 2/7.
 - [ ] Training: a Polish question about a leak (`Co zrobić, gdy widzę wyciek?`) is answered in Polish with S3 quoted, after switching the language to Polski.
@@ -173,4 +178,4 @@ pending, persistence across restarts, and the minimum window width. The short li
 None. Relay uses Foundation, SwiftUI, AppKit, AVFoundation, Security (Keychain) and XCTest
 only. ElevenLabs is reached over its public REST API with `URLSession`, not through an SDK.
 
-More detail: `docs/ARCHITECTURE.md`, `docs/WYBE.md`, `docs/WAREHOUSE.md`, `docs/ELEVENLABS.md`.
+More detail: `../docs/BUILDING.md` (build, package, launch), `docs/ARCHITECTURE.md`, `docs/WYBE.md`, `docs/WAREHOUSE.md`, `docs/ELEVENLABS.md`.
