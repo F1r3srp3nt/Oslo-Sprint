@@ -45,6 +45,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 520)
+        .task { await captureSnapshotsIfRequested() }
         .background(WindowCloseGuard(isEdited: store.hasUnsavedChanges) { window in
             store.requestCloseWindow(window)
         })
@@ -129,6 +130,39 @@ struct ContentView: View {
         .navigationTitle(section.title)
         .navigationSubtitle(store.windowSubtitle)
         .safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
+    }
+
+    /// CI screenshot mode (only when DS_SNAPSHOT_DIR is set): every section at normal and minimum
+    /// window size, first with the empty untitled project, then with the synthetic "pasted notes"
+    /// demonstration loaded (preview and comparison run locally). No network requests are made.
+    private func captureSnapshotsIfRequested() async {
+        guard DSSnapshot.isActive else { return }
+        await DSSnapshot.pause(2)
+        var entries: [DSSnapshot.Entry] = []
+        let sizes: [(String, CGSize)] = [("normal", CGSize(width: 1240, height: 820)), ("minimum", CGSize(width: 760, height: 520))]
+        for (label, size) in sizes {
+            DSSnapshot.resize(to: size)
+            for section in AppSection.allCases {
+                store.selectedSection = section
+                await DSSnapshot.pause(0.9)
+                entries.append(DSSnapshot.capture("distil-\(label)-empty-\(section.rawValue)", section: section.title,
+                                                  state: "empty project, \(label) size"))
+            }
+        }
+        DSSnapshot.resize(to: sizes[0].1)
+        store.loadDemo(.pastedNotes)
+        store.preview()
+        await DSSnapshot.pause(3)
+        for section in AppSection.allCases {
+            store.selectedSection = section
+            await DSSnapshot.pause(0.9)
+            entries.append(DSSnapshot.capture("distil-normal-demo-\(section.rawValue)", section: section.title,
+                                              state: "demonstration loaded, normal size"))
+        }
+        // A CI run: quit without the unsaved-changes prompt (nothing is saved).
+        store.allowTerminationWithoutPrompt = true
+        let build = BuildInfo.current
+        DSSnapshot.finish(app: "Distil", build: build.version + (build.commit.map { " · \($0)" } ?? ""), entries: entries)
     }
 
     private func badge(for section: AppSection) -> Int {

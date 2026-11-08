@@ -56,3 +56,31 @@ jobs:
         run: swift test
       - name: Build Distil.app bundle
         run: SKIP_TESTS=1 bash scripts/build-macos.sh
+      - name: Capture screenshots of the running app
+        run: |
+          shots="$PWD/build/screenshots"
+          mkdir -p "$shots"
+          # Snapshot mode: the app shows every section at normal and minimum size, renders its own
+          # window to PNG (no screen-recording permission needed), writes manifest.md and quits.
+          DS_SNAPSHOT_DIR="$shots" "dist/Distil.app/Contents/MacOS/Distil" &
+          pid=$!
+          sleep 10
+          # Best effort: a system screenshot of the whole runner screen. Without Screen Recording
+          # permission macOS returns only the desktop, so this file is labelled and may show no app.
+          screencapture -x "$shots/system-screen-best-effort.png" || echo "system screencapture unavailable"
+          for _ in $(seq 1 150); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Distil did not finish its captures in time" >&2
+            kill "$pid"; exit 1
+          fi
+          wait "$pid"
+          ls -la "$shots"
+          cat "$shots/manifest.md"
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distil-screenshots
+          path: distil/build/screenshots
+          if-no-files-found: warn
+          retention-days: 14
