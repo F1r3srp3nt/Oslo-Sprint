@@ -12,10 +12,12 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
     var body = Data()
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        lock.lock(); requests.append(request); lock.unlock()
+        record(request)
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])!
         return (body, response)
     }
+
+    private func record(_ request: URLRequest) { lock.lock(); defer { lock.unlock() }; requests.append(request) }
 
     var sent: [URLRequest] { lock.lock(); defer { lock.unlock() }; return requests }
 }
@@ -58,10 +60,18 @@ final class ElevenLabsAdapterTests: XCTestCase {
         let request = try XCTUnwrap(transport.sent.first)
         XCTAssertEqual(request.url?.absoluteString,
                        "https://api.elevenlabs.io/v1/text-to-speech/VoiceABC123?output_format=mp3_44100_128")
+        XCTAssertFalse(request.url!.absoluteString.contains(key), "the key travels only in the header")
         let json = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: String]
         XCTAssertEqual(json["text"], "Krok 1")
-        XCTAssertEqual(json["model_id"], "eleven_multilingual_v2")
-        XCTAssertNil(json["language_code"], "not supported for multilingual_v2 per the API definition")
+        XCTAssertEqual(json["model_id"], "eleven_flash_v2_5", "default covers en, nb and pl")
+        XCTAssertEqual(json["language_code"], "pl")
+
+        let multilingual = ElevenLabsClient(configuration: ElevenLabsConfiguration(textToSpeechModel: "eleven_multilingual_v2",
+                                                                                   voiceID: "VoiceABC123"),
+                                            transport: transport, redactor: Redactor(), apiKey: { [key] in key })
+        _ = try await ElevenLabsSynthesizer(client: multilingual).synthesize(text: "x", languageCode: "pl")
+        let body = try JSONSerialization.jsonObject(with: transport.sent.last!.httpBody!) as! [String: String]
+        XCTAssertNil(body["language_code"], "not supported for multilingual_v2 per the API reference")
     }
 
     func testMissingCredentialsSendNothing() async {
@@ -79,22 +89,23 @@ final class ElevenLabsAdapterTests: XCTestCase {
         XCTAssertTrue(transport.sent.isEmpty)
     }
 
-    func testVerifyNeverFakesAConnection() async {
+    func testAccountCheckNeverFakesAConnection() async {
         let transport = FakeTransport()
-        let noKey = await client(transport, key: nil).verify()
-        XCTAssertEqual(noKey, .unconfigured)
+        let noKey = await client(transport, key: nil).checkAccount()
+        XCTAssertEqual(noKey.failure, .missingAPIKey)
         XCTAssertTrue(transport.sent.isEmpty)
 
         transport.status = 401
-        transport.body = Data(#"{"detail":{"status":"invalid_api_key","message":"Invalid API key"}}"#.utf8)
-        let rejected = await client(transport, key: key).verify()
-        XCTAssertEqual(rejected, .failed("ElevenLabs rejected the API key (401)"))
+        transport.body = Data(#"{"detail":{"type":"authentication_error","code":"invalid_api_key","message":"Invalid API key"}}"#.utf8)
+        let rejected = await client(transport, key: key).checkAccount()
+        XCTAssertEqual(rejected.failure?.rejection?.kind, .invalidCredentials)
 
         transport.status = 200
-        let fixed = Date(timeIntervalSince1970: 1)
-        let ok = await client(transport, key: key).verify(now: { fixed })
-        XCTAssertEqual(ok, .connected(verifiedAt: fixed))
+        transport.body = Data("{}".utf8)
+        let ok = await client(transport, key: key).checkAccount()
+        XCTAssertNil(ok.failure)
         XCTAssertEqual(transport.sent.last?.url?.path, "/v1/user")
+        XCTAssertEqual(transport.sent.last?.httpMethod, "GET")
     }
 
     func testErrorBodiesAreRedacted() async {
@@ -117,19 +128,23 @@ final class ElevenLabsAdapterTests: XCTestCase {
         let synthesizer = ElevenLabsSynthesizer(client: client(transport, key: key))
         transport.status = 429
         do { _ = try await synthesizer.synthesize(text: "x", languageCode: nil); XCTFail() }
-        catch { XCTAssertEqual(error as? ElevenLabsError, .rateLimited) }
+        catch { XCTAssertEqual((error as? ElevenLabsError)?.rejection?.kind, .rateLimited) }
         transport.status = 503
         do { _ = try await synthesizer.synthesize(text: "x", languageCode: nil); XCTFail() }
-        catch { XCTAssertEqual(error as? ElevenLabsError, .server(503)) }
+        catch { XCTAssertEqual((error as? ElevenLabsError)?.rejection?.kind, .serverError) }
     }
 
     func testVoiceIDCannotInjectPath() async {
         let transport = FakeTransport()
         let synthesizer = ElevenLabsSynthesizer(client: client(transport, key: key, voice: "../v1/user"))
         do { _ = try await synthesizer.synthesize(text: "x", languageCode: nil); XCTFail() }
-        catch { XCTAssertTrue(String(describing: error).contains("voice ID")) }
+        catch { XCTAssertTrue(String(describing: error).contains("Voice ID")) }
         XCTAssertTrue(transport.sent.isEmpty)
     }
+}
+
+extension Result {
+    var failure: Failure? { if case let .failure(e) = self { return e } else { return nil } }
 }
 
 final class CredentialTests: XCTestCase {

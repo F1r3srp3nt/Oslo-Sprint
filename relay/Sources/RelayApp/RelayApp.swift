@@ -1,4 +1,5 @@
 import AppKit
+import RelayAdapters
 import RelayCore
 import SwiftUI
 
@@ -104,8 +105,8 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
             HStack(spacing: 6) {
-                Circle().fill(Theme.color(model.connectionStatus)).frame(width: 7, height: 7)
-                Text("Speech: \(model.connectionStatus.label)").font(.caption).foregroundStyle(Theme.textSecondary)
+                Circle().fill(Theme.color(model.readiness)).frame(width: 7, height: 7)
+                Text(model.readiness.summary).font(.caption).foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
             }
             if model.wybeRunning {
