@@ -64,6 +64,8 @@ above bold page titles, cyan primary buttons with dark text, and themed fields a
 **Futuristic** is the default appearance. Settings › Appearance also offers Dark (no grid or glow),
 Light and Match System. Installations that were on "Match System" move to Futuristic once; an
 explicit Dark or Light choice is kept. The sidebar's Build card shows which copy is running.
+Drag the thin line at the sidebar's edge to resize it (200–290 points). The width is remembered, and
+it shrinks automatically if the window is too narrow.
 
 The skin has not yet been viewed on a Mac. Build, launch and check it with
 `relay/docs/SKIN-VERIFICATION.md`.
