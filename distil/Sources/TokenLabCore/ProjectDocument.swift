@@ -14,13 +14,28 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var reviewTemplate: ReviewTemplate
     public var library: [ContextBlock]
     public var experiments: [Experiment]
+    /// Original pasted material, kept exactly so it can be recovered after splitting into blocks.
+    /// Added after schema 3 was introduced; files without it load with an empty list.
+    public var pastedSources: [PastedSource]
 
     public init(notes: String = "", draft: Draft = Draft(), settings: SelectionSettings = SelectionSettings(),
                 reviewTemplate: ReviewTemplate = ReviewTemplate(),
-                library: [ContextBlock] = [], experiments: [Experiment] = []) {
+                library: [ContextBlock] = [], experiments: [Experiment] = [], pastedSources: [PastedSource] = []) {
         self.schemaVersion = Self.currentSchemaVersion
         self.notes = notes; self.draft = draft; self.settings = settings; self.reviewTemplate = reviewTemplate
-        self.library = library; self.experiments = experiments
+        self.library = library; self.experiments = experiments; self.pastedSources = pastedSources
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        notes = try c.decode(String.self, forKey: .notes)
+        draft = try c.decode(Draft.self, forKey: .draft)
+        settings = try c.decode(SelectionSettings.self, forKey: .settings)
+        reviewTemplate = try c.decode(ReviewTemplate.self, forKey: .reviewTemplate)
+        library = try c.decode([ContextBlock].self, forKey: .library)
+        experiments = try c.decode([Experiment].self, forKey: .experiments)
+        pastedSources = try c.decodeIfPresent([PastedSource].self, forKey: .pastedSources) ?? []
     }
 
     public func validate() throws {
@@ -39,6 +54,12 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         let libraryBytes = library.reduce(0) { $0 + $1.text.utf8.count }
         guard libraryBytes <= SelectionEngine.maxTextBytes * 2 else { throw LabError.invalid("Library text is limited to 4 MB in this prototype.") }
         for experiment in experiments { try experiment.validate() }
+        guard Set(pastedSources.map(\.id)).count == pastedSources.count else {
+            throw LabError.invalid("Pasted originals contain duplicate identifiers.")
+        }
+        guard pastedSources.reduce(0, { $0 + $1.text.utf8.count }) <= SelectionEngine.maxTextBytes * 2 else {
+            throw LabError.invalid("Pasted originals are limited to 4 MB in this prototype.")
+        }
     }
 }
 

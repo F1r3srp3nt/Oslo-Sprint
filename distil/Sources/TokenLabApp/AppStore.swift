@@ -23,6 +23,17 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .settings: return "Settings"
         }
     }
+    /// One-line description shown in the page header.
+    var subtitle: String {
+        switch self {
+        case .overview: return "Project status, current settings and entry points."
+        case .workspace: return "Task, protected instructions and context — and exactly what would be sent."
+        case .comparison: return "The same input through four configurations, side by side."
+        case .library: return "Reusable context. Inserted copies are independent."
+        case .experiments: return "Saved snapshots, recorded answers and manual quality review."
+        case .settings: return "Appearance, token counting, ranking and local data."
+        }
+    }
     var symbol: String {
         switch self {
         case .overview: return "square.grid.2x2"
@@ -253,6 +264,57 @@ enum AppSection: String, CaseIterable, Identifiable {
         return document.draft.blocks.indices.contains(index + offset)
     }
 
+    /// Add blocks proposed from a paste, keeping the exact original in the project. Returns false
+    /// (with an explanation) when the workspace limits would be exceeded; nothing is added then.
+    @discardableResult
+    func addPastedContext(title: String, original: String, blocks proposals: [ProposedBlock]) -> Bool {
+        guard !proposals.isEmpty else { return false }
+        let source = PastedSource(title: title, text: original)
+        let blocks = proposals.map {
+            ContextBlock(title: $0.title, text: $0.text, category: $0.category, priority: ContextPriority.medium,
+                         required: $0.required, pastedSourceID: source.id)
+        }
+        var draft = document.draft
+        draft.blocks += blocks
+        do { try SelectionEngine.validate(draft) }
+        catch { fail("The pasted context was not added. \(error.localizedDescription)"); return false }
+        document.pastedSources.append(source)
+        document.draft = draft
+        selectedSection = .workspace
+        status = "Added \(blocks.count) block\(blocks.count == 1 ? "" : "s") from “\(title)”. The original is kept in the project."
+        return true
+    }
+
+    func removePastedSource(_ id: UUID) {
+        guard let source = document.pastedSources.first(where: { $0.id == id }) else { return }
+        guard Dialogs.confirm(title: "Remove the original “\(source.title)”?",
+                              message: "The exact pasted text will no longer be kept in this project. Blocks already made from it stay in the workspace.",
+                              confirmTitle: "Remove Original") else { return }
+        document.pastedSources.removeAll { $0.id == id }
+        for index in document.draft.blocks.indices where document.draft.blocks[index].pastedSourceID == id {
+            document.draft.blocks[index].pastedSourceID = nil
+        }
+        status = "Removed the original “\(source.title)”."
+    }
+
+    /// Make a block Required and run the selection again straight away.
+    func markRequired(_ id: UUID) {
+        guard let index = document.draft.blocks.firstIndex(where: { $0.id == id }) else { return }
+        document.draft.blocks[index].required = true
+        status = "“\(document.draft.blocks[index].title)” is now Required and will always be kept."
+        preview()
+    }
+
+    /// Ask the workspace editor to scroll to a block.
+    @Published var revealedBlockID: UUID?
+    /// The decision whose details are open in the review panel (kept across re-runs).
+    @Published var inspectedBlockID: UUID?
+
+    func revealBlock(_ id: UUID) {
+        selectedSection = .workspace
+        revealedBlockID = id
+    }
+
     func copyToLibrary(_ id: UUID) {
         guard let block = document.draft.blocks.first(where: { $0.id == id }) else { return }
         guard document.library.count < ProjectDocument.maxLibraryItems else { return fail("The library is limited to \(ProjectDocument.maxLibraryItems) items.") }
@@ -341,17 +403,12 @@ enum AppSection: String, CaseIterable, Identifiable {
             .sorted { order.firstIndex(of: $0.comparison!.variant)! < order.firstIndex(of: $1.comparison!.variant)! }
     }
 
-    /// Copy this experiment's full-context answer to group members that have none yet. Never overwrites.
+    /// Copy this experiment's full-context reference to linked experiments that qualify (same comparison,
+    /// byte-identical saved full-context prompt, completely blank reference). Never overwrites anything.
     func shareFullContextAnswer(from id: UUID) {
-        guard let source = document.experiments.first(where: { $0.id == id }), source.evaluation.fullContextRun.hasResponse,
-              let group = source.comparison?.groupID else { return }
-        var copied = 0, skipped = 0
-        for index in document.experiments.indices where document.experiments[index].comparison?.groupID == group && document.experiments[index].id != id {
-            if document.experiments[index].evaluation.fullContextRun.hasResponse { skipped += 1; continue }
-            document.experiments[index].evaluation.fullContextRun = source.evaluation.fullContextRun
-            copied += 1
-        }
-        status = "Copied the full-context answer to \(copied) linked experiment\(copied == 1 ? "" : "s")" + (skipped > 0 ? "; \(skipped) already had one and were not changed." : ".")
+        let (updated, outcome) = ReferenceSharing.share(from: id, in: document.experiments)
+        if outcome.sourceUnavailable == nil { document.experiments = updated }
+        status = outcome.summary
     }
 
     func experimentBinding(_ id: UUID) -> Binding<Experiment>? {

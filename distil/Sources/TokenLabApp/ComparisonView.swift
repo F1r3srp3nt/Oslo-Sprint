@@ -29,7 +29,7 @@ struct ComparisonView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Same input, four configurations").font(.title3.weight(.semibold))
+                Text("Same input, four configurations").font(DS.Typeface.sectionTitle).foregroundStyle(DS.textPrimary)
                 if store.isComparing { ProgressView().controlSize(.small) }
                 Spacer()
             }
@@ -37,7 +37,7 @@ struct ComparisonView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Label("Token counts are input estimates, not measured cost. Keyword matches do not show that a block is useful or an answer correct. Answer quality is “Not evaluated” until answers are recorded and reviewed in Experiments.",
                   systemImage: "exclamationmark.shield")
-                .font(.caption).foregroundStyle(.orange)
+                .font(.caption).foregroundStyle(DS.warning)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
@@ -80,7 +80,7 @@ struct ComparisonView: View {
                      ? "The input, settings or counter changed. Old results are hidden so they cannot be mistaken for the current input."
                      : "Run all four configurations on the current input.")
             } actions: {
-                Button("Run Comparison") { store.runComparison() }.buttonStyle(.borderedProminent).disabled(store.isComparing)
+                Button("Run Comparison") { store.runComparison() }.buttonStyle(.dsPrimary).disabled(store.isComparing)
             }
         }
     }
@@ -91,13 +91,13 @@ struct ComparisonView: View {
         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
             GridRow {
                 Text("")
-                ForEach(entries) { Text($0.variant.label).font(.subheadline.weight(.semibold)).frame(minWidth: 150, alignment: .leading) }
+                ForEach(entries) { Text($0.variant.label).font(.subheadline.weight(.semibold)).foregroundStyle(DS.textPrimary).frame(minWidth: 150, alignment: .leading) }
             }
             Divider()
             row("Input tokens", entries) { "\($0.selectedTokens)" }
             row("Counter", entries) { $0.counter.kind == .approximation ? "\($0.counter.encoding) (estimate)" : $0.counter.encoding }
             row("Est. change vs full", entries) { report in
-                report.estimatedReduction == 0 ? "—" : "−\(report.estimatedReduction) (\(percentString(report.estimatedReductionPercent)))"
+                TokenChange.describe(baseline: report.originalTokens, candidate: report.selectedTokens)
             }
             row("Retained / excluded", entries) { "\($0.keptCount) / \($0.removedCount)" }
             row("Budget", entries) { report in
@@ -105,17 +105,18 @@ struct ComparisonView: View {
                 return report.overBudget ? "over by \(report.overBudgetBy) (protected content)" : "within \(report.budget)"
             }
             GridRow {
-                Text("Answer quality").foregroundStyle(.secondary)
-                ForEach(entries) { _ in Pill(text: "Not evaluated", color: .secondary) }
+                Text("Answer quality").dsColumnHeader()
+                ForEach(entries) { _ in DSBadge(text: "Quality not evaluated", systemImage: "questionmark.circle", tone: .neutral) }
             }
         }
         .font(.callout)
+        .dsPanel(padding: DS.Space.l)
     }
 
     private func row(_ title: String, _ entries: [ComparisonEntry], _ value: @escaping (SelectionReport) -> String) -> some View {
         GridRow {
-            Text(title).foregroundStyle(.secondary)
-            ForEach(entries) { Text(value($0.report)).monospacedDigit().textSelection(.enabled) }
+            Text(title).dsColumnHeader()
+            ForEach(entries) { Text(value($0.report)).font(DS.Typeface.mono).monospacedDigit().foregroundStyle(DS.textPrimary).textSelection(.enabled) }
         }
     }
 
@@ -128,10 +129,10 @@ struct ComparisonView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                 GridRow {
-                    Text("Block").font(.caption.weight(.semibold))
-                    Text("Priority").font(.caption.weight(.semibold))
-                    Text("Keyword score").font(.caption.weight(.semibold))
-                    ForEach(entries) { Text($0.variant.strategy.shortName).font(.caption.weight(.semibold)) }
+                    Text("Block").dsColumnHeader()
+                    Text("Priority").dsColumnHeader()
+                    Text("Keyword score").dsColumnHeader()
+                    ForEach(entries) { Text($0.variant.strategy.shortName).dsColumnHeader() }
                 }
                 Divider()
                 ForEach(Array(store.document.draft.blocks.enumerated()), id: \.element.id) { index, block in
@@ -141,14 +142,14 @@ struct ComparisonView: View {
                             selectedBlock = selectedBlock == block.id ? nil : block.id
                         } label: {
                             HStack(spacing: 4) {
-                                if block.required { Image(systemName: "lock.fill").foregroundStyle(.blue).font(.caption) }
+                                if block.required { Image(systemName: "lock.fill").foregroundStyle(DS.accent).font(.caption) }
                                 Text("\(index + 1). \(block.title.isEmpty ? "Untitled context" : block.title)").lineLimit(1)
                             }
                             .frame(minWidth: 200, alignment: .leading)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(selectedBlock == block.id ? Color.accentColor : Color.primary)
+                        .foregroundStyle(selectedBlock == block.id ? DS.accent : DS.textPrimary)
                         .accessibilityHint("Shows the reasons for this block")
                         Text(block.required ? "Required" : ContextPriority.label(block.priority)).font(.caption).foregroundStyle(.secondary)
                         Text(relevance.map { String(format: "%.2f", $0.score) } ?? "—").font(.caption.monospacedDigit())
@@ -164,6 +165,7 @@ struct ComparisonView: View {
                 }
             }
         }
+        .dsPanel(padding: DS.Space.l)
     }
 
     private func reasons(for id: UUID, _ entries: [ComparisonEntry]) -> some View {

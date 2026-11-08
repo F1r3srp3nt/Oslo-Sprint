@@ -19,7 +19,8 @@ struct OverviewView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                        .background(DS.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DS.Radius.panel))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.panel).strokeBorder(DS.warning.opacity(0.35)))
                 }
                 if isEmptyProject { gettingStarted }
                 if !document.draft.task.isEmpty {
@@ -64,7 +65,7 @@ struct OverviewView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(store.session.displayName).font(.largeTitle.bold()).lineLimit(1)
+            Text(store.session.displayName).font(.title2.weight(.semibold)).foregroundStyle(DS.textPrimary).lineLimit(1)
             HStack(spacing: 8) {
                 if let url = store.session.fileURL {
                     Label(url.path, systemImage: "doc").lineLimit(1).truncationMode(.middle)
@@ -72,12 +73,12 @@ struct OverviewView: View {
                 } else {
                     Label("Not saved to a file yet", systemImage: "doc.badge.ellipsis")
                 }
-                if store.hasUnsavedChanges { Pill(text: "Unsaved changes", color: .orange) }
+                if store.hasUnsavedChanges { Pill(text: "Unsaved changes", color: DS.warning, systemImage: "pencil.circle") }
             }
             .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Button { store.selectedSection = .workspace } label: { Label("Open Prompt Workspace", systemImage: "text.alignleft") }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.dsPrimary)
                 Button { store.openProject() } label: { Label("Open Project…", systemImage: "folder") }
                 Button { _ = store.save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
                     .disabled(!store.hasUnsavedChanges && store.session.fileURL != nil)
@@ -137,7 +138,7 @@ struct OverviewView: View {
                     LabeledContent("Estimated reduction", value: percentString(report.estimatedReductionPercent))
                     LabeledContent("Kept / removed", value: "\(report.keptCount) / \(report.removedCount)")
                     if report.overBudget {
-                        Label("Over budget by \(report.overBudgetBy)", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Label("Over budget by \(report.overBudgetBy)", systemImage: "exclamationmark.triangle").foregroundStyle(DS.warning)
                     }
                 } else {
                     Text(store.hasStaleReport ? "The last preview is out of date." : "No current preview.")
@@ -166,8 +167,7 @@ struct OverviewView: View {
                         HStack {
                             Text(experiment.name).lineLimit(1)
                             Spacer()
-                            Pill(text: experiment.evaluation.verdict.label,
-                                 color: experiment.evaluation.isEvaluated ? .blue : .secondary)
+                            VerdictBadge(evaluation: experiment.evaluation)
                         }
                         .contentShape(Rectangle())
                     }

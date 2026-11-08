@@ -31,9 +31,11 @@ struct LibraryView: View {
                         .tag(item.id)
                         .contextMenu { rowMenu(item) }
                 }
+                .scrollContentBackground(.hidden)
                 .overlay { emptyState }
             }
-            .frame(minWidth: 240, idealWidth: 290, maxWidth: 420, maxHeight: .infinity)
+            .background(DS.surface.opacity(0.45))
+            .frame(minWidth: 220, idealWidth: 290, maxWidth: 420, maxHeight: .infinity)
 
             Group {
                 if let id = store.selectedLibraryID, let binding = store.libraryBinding(id) {
@@ -44,7 +46,7 @@ struct LibraryView: View {
                                            description: Text("Library items are reusable context. Inserting one into the workspace creates an independent copy."))
                 }
             }
-            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 330, maxWidth: .infinity, maxHeight: .infinity)
         }
         .searchable(text: $search, placement: .toolbar, prompt: "Search titles and text")
         .toolbar {
@@ -108,7 +110,7 @@ struct LibraryRow: View {
                 Text(ContextPriority.label(item.priority))
                 if uses > 0 { Text("·"); Text("In workspace ×\(uses)") }
             }
-            .font(.caption2).foregroundStyle(.tertiary)
+            .font(.caption2).foregroundStyle(DS.textTertiary)
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
@@ -126,7 +128,7 @@ struct LibraryDetail: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Button { store.useLibraryItem(item.id) } label: { Label("Insert into Workspace", systemImage: "arrow.down.doc") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.dsPrimary)
                         .disabled(item.text.isEmpty)
                     Button { store.duplicateLibraryItem(item.id) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
                     Spacer()
