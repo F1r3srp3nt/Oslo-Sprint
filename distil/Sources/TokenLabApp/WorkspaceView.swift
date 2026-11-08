@@ -5,6 +5,7 @@ struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
     @State private var pendingDeletion: ContextBlock?
     @State private var showingPaste = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var draft: Draft { store.document.draft }
 
@@ -32,7 +33,7 @@ struct WorkspaceView: View {
                 }
                 .onChange(of: store.revealedBlockID) { _, id in
                     guard let id else { return }
-                    withAnimation(DS.motion(false)) { proxy.scrollTo(id, anchor: .top) }
+                    withAnimation(DS.motion(reduceMotion)) { proxy.scrollTo(id, anchor: .top) }
                     store.revealedBlockID = nil
                 }
             }

@@ -60,7 +60,7 @@ struct ContentView: View {
 
     /// The stored width, clamped to 180–280 and to whatever leaves the detail pane its minimum.
     static func sidebarWidth(stored: Double, windowWidth: CGFloat) -> CGFloat {
-        let upper = max(sidebarMinWidth, min(sidebarMaxWidth, windowWidth - detailMinWidth - SidebarResizeHandle.width))
+        let upper = max(sidebarMinWidth, min(sidebarMaxWidth, windowWidth - detailMinWidth - SidebarResizeHandle.thickness))
         return min(max(CGFloat(stored), sidebarMinWidth), upper)
     }
 
@@ -157,22 +157,23 @@ struct StatusBar: View {
 
 /// Drag to resize the sidebar. Also adjustable with VoiceOver (increment/decrement).
 struct SidebarResizeHandle: View {
-    static let width: CGFloat = 5
+    static let thickness: CGFloat = 5
     @Binding var width: Double
     let range: ClosedRange<CGFloat>
     @State private var dragStart: Double?
     @State private var hovering = false
+    @State private var cursorPushed = false
 
     var body: some View {
         Rectangle()
             .fill(Color.clear)
-            .frame(width: Self.width)
+            .frame(width: Self.thickness)
             .frame(maxHeight: .infinity)
             .overlay(Rectangle().fill(DS.accent.opacity(hovering || dragStart != nil ? 0.45 : 0.16)).frame(width: 1))
             .contentShape(Rectangle())
             .onHover { inside in
                 hovering = inside
-                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                updateCursor()
             }
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
@@ -181,8 +182,9 @@ struct SidebarResizeHandle: View {
                         dragStart = start
                         width = clamp(start + Double(value.translation.width))
                     }
-                    .onEnded { _ in dragStart = nil }
+                    .onEnded { _ in dragStart = nil; updateCursor() }
             )
+            .onDisappear { if cursorPushed { NSCursor.pop(); cursorPushed = false } }
             .accessibilityElement()
             .accessibilityLabel("Sidebar width")
             .accessibilityValue("\(Int(width)) points")
@@ -194,6 +196,13 @@ struct SidebarResizeHandle: View {
                 }
             }
             .help("Drag to resize the sidebar")
+    }
+
+    /// Keep the resize cursor while hovering or dragging; push and pop stay balanced.
+    private func updateCursor() {
+        let wanted = hovering || dragStart != nil
+        if wanted && !cursorPushed { NSCursor.resizeLeftRight.push(); cursorPushed = true }
+        if !wanted && cursorPushed { NSCursor.pop(); cursorPushed = false }
     }
 
     private func clamp(_ value: Double) -> Double {

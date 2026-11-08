@@ -79,7 +79,7 @@ struct PasteContextSheet: View {
                 ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented).frame(maxWidth: 420)
-            Text(mode == .split
+            Text(verbatim: mode == .split
                  ? "Splits at Markdown headings when there are any, otherwise at blank lines between paragraphs. Fenced code blocks (``` or ~~~) are never split. Block text is copied exactly: nothing is rewritten, summarised or shortened."
                  : "Adds the whole paste as a single block, exactly as pasted.")
                 .font(.caption).foregroundStyle(DS.textSecondary).fixedSize(horizontal: false, vertical: true)
