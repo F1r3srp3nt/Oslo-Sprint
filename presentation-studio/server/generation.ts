@@ -6,7 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { ZodType } from 'zod';
-import type { ServerConfig } from './config';
+import { setupHint, type ServerConfig } from './config';
 import { ApiError } from './errors';
 import { OUTLINE_SYSTEM, SLIDE_SYSTEM, outlineUserContent, slideUserContent } from './prompts';
 import {
@@ -23,16 +23,16 @@ export interface Generator {
   verify(): Promise<void>;
 }
 
-export function mapAnthropicError(err: unknown): ApiError {
+export function mapAnthropicError(err: unknown, mode: ServerConfig['mode'] = 'web'): ApiError {
   if (err instanceof ApiError) return err;
   if (err instanceof Anthropic.AuthenticationError) {
-    return new ApiError(401, 'generation_auth', 'The generation provider rejected the API key.', false, 'Check ANTHROPIC_API_KEY in presentation-studio/.env and restart the server.');
+    return new ApiError(401, 'generation_auth', 'The generation provider rejected the API key.', false, `The key may be wrong, revoked or expired. ${setupHint(mode, 'anthropic')}`);
   }
   if (err instanceof Anthropic.PermissionDeniedError) {
-    return new ApiError(403, 'generation_permission', 'The API key is not allowed to use this model.', false, 'Check the key\'s workspace permissions or set ANTHROPIC_MODEL to a model you can use.');
+    return new ApiError(403, 'generation_permission', 'The API key is not allowed to use this model.', false, mode === 'desktop' ? 'Check the key\'s workspace permissions, or choose a model you can use in Setup.' : 'Check the key\'s workspace permissions or set ANTHROPIC_MODEL to a model you can use.');
   }
   if (err instanceof Anthropic.NotFoundError) {
-    return new ApiError(404, 'generation_model', 'The configured model was not found.', false, 'Check ANTHROPIC_MODEL in .env.');
+    return new ApiError(404, 'generation_model', 'The configured model was not found.', false, mode === 'desktop' ? 'Check the model name in Setup.' : 'Check ANTHROPIC_MODEL in .env.');
   }
   if (err instanceof Anthropic.RateLimitError) {
     return new ApiError(429, 'generation_rate_limited', 'The generation provider is rate limiting requests.', true, 'Wait a moment and retry.');
@@ -49,8 +49,8 @@ export function mapAnthropicError(err: unknown): ApiError {
   return new ApiError(500, 'generation_failed', 'Generation failed unexpectedly.', true);
 }
 
-export function createAnthropicGenerator(cfg: ServerConfig['generation'], client?: Anthropic): Generator {
-  const anthropic = client ?? new Anthropic({ apiKey: cfg.apiKey ?? undefined, maxRetries: 2 });
+export function createAnthropicGenerator(cfg: ServerConfig['generation'], client?: Anthropic, mode: ServerConfig['mode'] = 'web'): Generator {
+  const anthropic = client ?? new Anthropic({ apiKey: cfg.apiKey ?? undefined, maxRetries: 2, ...(cfg.baseUrl ? { baseURL: cfg.baseUrl } : {}) });
 
   async function call<T>(system: string, content: Anthropic.Beta.BetaContentBlockParam[], schema: ZodType<T>): Promise<unknown> {
     let response;
@@ -64,7 +64,7 @@ export function createAnthropicGenerator(cfg: ServerConfig['generation'], client
         messages: [{ role: 'user', content }],
       });
     } catch (err) {
-      if (err instanceof Anthropic.APIError || err instanceof ApiError) throw mapAnthropicError(err);
+      if (err instanceof Anthropic.APIError || err instanceof ApiError) throw mapAnthropicError(err, mode);
       // The SDK throws a plain error when the model's JSON does not match the schema.
       throw new ApiError(502, 'invalid_output', 'The model returned content that is not valid slide JSON.', true, 'Retry. Nothing was changed in your deck.');
     }
@@ -102,7 +102,7 @@ export function createAnthropicGenerator(cfg: ServerConfig['generation'], client
       try {
         await anthropic.models.retrieve(cfg.model);
       } catch (err) {
-        throw mapAnthropicError(err);
+        throw mapAnthropicError(err, mode);
       }
     },
   };

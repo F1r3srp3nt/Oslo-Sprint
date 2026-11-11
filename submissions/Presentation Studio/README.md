@@ -14,6 +14,6 @@ Packaged builds of Presentation Studio, one folder per operating system. These f
 
 ## Source
 
-The source in [`presentation-studio/`](../../presentation-studio/README.md) is a web app (React + TypeScript interface, Node/Express backend). It runs from source with Node.js; no packaged desktop or mobile app exists in this repository.
+The source in [`presentation-studio/`](../../presentation-studio/README.md) is a React + TypeScript app with a Node/Express backend, packaged as an **Electron desktop app** for macOS (Apple Silicon). [`MacOS/`](MacOS/README.md) explains how to build and install it and what has been verified. No macOS package has been uploaded here yet, because the ZIP and DMG are larger than GitHub's 100 MB file limit; CI builds, verifies and launch-tests them on macOS and keeps them as a downloadable artifact. No Windows, Linux, Android or iOS package exists.
 
 Back to [all submissions](../README.md).
